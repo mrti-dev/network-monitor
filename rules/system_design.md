@@ -38,7 +38,7 @@
 | **Execution Model** | Java 25 **Virtual Threads** — `Executors.newVirtualThreadPerTaskExecutor()`. |
 | **Kích hoạt** | `@Scheduled` + `@Async` (Spring AsyncConfig). |
 | **Blocking I/O?** | Có — gọi `Socket.connect()`, `InetAddress.isReachable()`, `SnmpSession.get()` (blocking). Đây là I/O ngầm, KHÔNG chạy trên luồng web. |
-| **Ghi DB** | Ghi `metric_snapshots`, `device_logs`, `alerts`. |
+| **Ghi DB** | Ghi `metric_logs`, `device_logs`, `alerts`. |
 | **Publish Event** | Phát `DeviceStatusChangedEvent`, `AlertTriggeredEvent` qua `ApplicationEventPublisher`. |
 
 #### Luồng 2 — Web Application (Tương Tác Client)
@@ -48,7 +48,7 @@
 | **Vai trò** | Tiếp nhận HTTP REST API, trả JSON, push WebSocket/STOMP. |
 | **Execution Model** | Tomcat Thread Pool (HTTP request threads). |
 | **Blocking I/O?** | **Nghiêm cấm** — không được probe mạng trong luồng này. |
-| **Đọc DB** | Đọc `devices`, `metric_snapshots` (aggregated), `alerts` cho API/Dashboard. |
+| **Đọc DB** | Đọc `devices`, `metric_logs` (aggregated), `alerts` cho API/Dashboard. |
 | **Lắng nghe Event** | `@EventListener` cập nhật cache in-memory và đẩy qua `/topic/*`. |
 
 ### 1.3 Sơ Đồ Kiến Trúc Tổng Thể
@@ -145,7 +145,7 @@ sequenceDiagram
             EB->>WS: push /topic/device-status/{id}
             E->>DB: UPDATE devices SET health_status
         end
-        E->>DB: INSERT metric_snapshots
+        E->>DB: INSERT metric_logs
     end
 ```
 
@@ -158,13 +158,14 @@ sequenceDiagram
 ```
 com.network.network_monitor/
 ├── controller/     → HTTP REST API endpoints (@RestController)
-├── service/        → Business logic (@Service)
+├── service/        → Business logic (@Service) + impl/
 ├── repository/     → Spring Data JPA interfaces (@Repository)
 ├── entity/         → JPA @Entity classes
-├── dto/            → Request/Response DTOs
-├── event/          → Domain events + listeners
+├── enums/          → Domain enums
+├── dto/            → Request/Response DTOs (request|response)
+├── event/          → Domain events + listener/
 ├── strategy/       → Probing strategy interfaces & implementations
-├── engine/         → Scheduler, HealthEvaluator, AlertEngine
+├── scheduler/      → PollingScheduler, HealthEvaluator, AlertEngine
 ├── notification/   → Telegram, Email, WebSocket notifiers
 ├── config/         → @Configuration classes (Async, Security, WebSocket)
 ├── exception/      → Custom exceptions + GlobalExceptionHandler
@@ -244,15 +245,15 @@ DeviceService (interface)
 **Ví dụ repository query time-series:**
 
 ```java
-public interface MetricSnapshotRepository extends JpaRepository<MetricSnapshot, Long> {
+public interface MetricLogRepository extends JpaRepository<MetricLog, Long> {
 
     @Query("""
-        SELECT m FROM MetricSnapshot m
+        SELECT m FROM MetricLog m
         WHERE m.device.id = :deviceId
           AND m.timestamp >= :startTime
         ORDER BY m.timestamp ASC
         """)
-    List<MetricSnapshot> findTimeSeries(
+    List<MetricLog> findTimeSeries(
         @Param("deviceId") Long deviceId,
         @Param("startTime") LocalDateTime startTime);
 }
@@ -475,7 +476,7 @@ public void onStatusChanged(DeviceStatusChangedEvent event) {
 
 | Nguyên tắc | Ứng dụng trong dự án |
 |---|---|
-| **S**ingle Responsibility | Service class chỉ làm 1 việc. `DeviceService` không gọi SNMP trực tiếp — giao cho `SnmpQueryStrategy`. |
+| **S**ingle Responsibility | Service class chỉ làm 1 việc. `DeviceService` không gọi SNMP trực tiếp — giao cho `SnmpStrategy`. |
 | **O**pen-Closed | Thêm probing strategy mới bằng implement `ProbingStrategy` — không sửa code cũ. |
 | **L**iskov Substitution | Mọi strategy thay thế được nhau, cùng hợp đồng `probe(Device) → ProbeResult`. |
 | **I**nterface Segregation | Tách `DeviceManagementService` / `DeviceMonitoringService` thay vì 1 interface khổng lồ. |
@@ -583,9 +584,9 @@ Nếu business yêu cầu kiểm tra trạng thái tức thì:
 Controller ──► Interface Service
                 │
                 ├──► Interface ProbingStrategy
-                │        ├── IcmpPingStrategy (impl)
-                │        ├── TcpPortCheckStrategy (impl)
-                │        └── SnmpQueryStrategy (impl)
+                │        ├── PingStrategy (impl)
+                │        ├── TcpPortStrategy (impl)
+                │        └── SnmpStrategy (impl)
                 │
                 ├──► Repository (JpaRepository)
                 │

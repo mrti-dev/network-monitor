@@ -62,7 +62,7 @@ graph TB
     DEV --> POLL
     SNMP --> POLL
     API --> POLL
-    POLL -->|MetricSnapshot| MYSQL
+    POLL -->|MetricLog| MYSQL
     POLL -->|Health Event| EVAL
     EVAL -->|Status Change| ALERT
     EVAL -->|Status Change| STOMP
@@ -79,7 +79,7 @@ graph TB
 |---|---|---|
 | `Device` | `devices` | Thiết bị vật lý/ảo được quản lý trong hệ thống. |
 | `MonitoringConfig` | `monitoring_configs` | Cấu hình chu kỳ quét, ngưỡng cảnh báo riêng cho từng thiết bị. |
-| `MetricSnapshot` | `metric_snapshots` | Bản ghi số liệu đo đạc tại một thời điểm (latency, loss, CPU, RAM, bandwidth). |
+| `MetricLog` | `metric_logs` | Bản ghi số liệu đo đạc tại một thời điểm (latency, loss, CPU, RAM, bandwidth). |
 | `DeviceLog` | `device_logs` | Nhật ký sự kiện thay đổi trạng thái, hành động của hệ thống. |
 | `Alert` | `alerts` | Sự cố được kích hoạt khi vượt ngưỡng hoặc mất kết nối. |
 | `User` | `users` | Tài khoản người dùng hệ thống. |
@@ -164,7 +164,7 @@ stateDiagram-v2
 | — | `ACTIVE` | Tạo mới thiết bị | Bắt đầu thăm dò theo chu kỳ cấu hình. |
 | `ACTIVE` | `MAINTENANCE` | Admin chủ động chuyển | **Tạm ngừng** thăm dò. **Vô hiệu hóa** tất cả alert đang `TRIGGERED` cho thiết bị này. Ghi `DeviceLog` với `action=ENTER_MAINTENANCE`. |
 | `MAINTENANCE` | `ACTIVE` | Admin kết thúc bảo trì | **Tiếp tục** thăm dò. **Reset** bộ đếm consecutive failures về `0`. Ghi `DeviceLog` với `action=EXIT_MAINTENANCE`. |
-| `ACTIVE` / `MAINTENANCE` | `DECOMMISSIONED` | Admin xóa软 (soft delete) | **Dừng** thăm dò. **Đóng** tất cả alert đang mở. Đánh dấu `deletedAt` timestamp. **KHÔNG** xóa vật lý dữ liệu MetricSnapshot (giữ nguyên lịch sử). |
+| `ACTIVE` / `MAINTENANCE` | `DECOMMISSIONED` | Admin xóa软 (soft delete) | **Dừng** thăm dò. **Đóng** tất cả alert đang mở. Đánh dấu `deletedAt` timestamp. **KHÔNG** xóa vật lý dữ liệu MetricLog (giữ nguyên lịch sử). |
 | `DECOMMISSIONED` | `ACTIVE` | Admin khôi phục | **Xóa** `deletedAt`. **Reset** health status về `UNKNOWN`. Bắt đầu thăm dò lại. |
 
 ### 2.3 Phân Vùng Quản Lý
@@ -206,7 +206,7 @@ Nếu `subnet` không được cung cấp, skip validation này.
 │         ▼         ▼         ▼                       │
 │  ┌─────────────────────────────────────┐            │
 │  │    Health Evaluator (per device)    │            │
-│  │    → Cập nhật MetricSnapshot        │            │
+│  │    → Cập nhật MetricLog        │            │
 │  │    → Chuyển đổi HealthStatus        │            │
 │  │    → Kích hoạt Alert nếu cần       │            │
 │  └─────────────────────────────────────┘            │
@@ -257,25 +257,25 @@ classDiagram
         +String errorMessage
     }
 
-    class IcmpPingStrategy {
+    class PingStrategy {
         +probe(Device): ProbeResult
     }
 
-    class TcpPortCheckStrategy {
+    class TcpPortStrategy {
         +probe(Device): ProbeResult
     }
 
-    class SnmpQueryStrategy {
+    class SnmpStrategy {
         +probe(Device): ProbeResult
         +Map~String,Object~ snmpMetrics
     }
 
-    ProbingStrategy <|.. IcmpPingStrategy
-    ProbingStrategy <|.. TcpPortCheckStrategy
-    ProbingStrategy <|.. SnmpQueryStrategy
-    IcmpPingStrategy ..> ProbeResult
-    TcpPortCheckStrategy ..> ProbeResult
-    SnmpQueryStrategy ..> ProbeResult
+    ProbingStrategy <|.. PingStrategy
+    ProbingStrategy <|.. TcpPortStrategy
+    ProbingStrategy <|.. SnmpStrategy
+    PingStrategy ..> ProbeResult
+    TcpPortStrategy ..> ProbeResult
+    SnmpStrategy ..> ProbeResult
 ```
 
 #### 3.2.1 ICMP Ping Strategy
@@ -324,7 +324,7 @@ Quy tắc chọn (theo thứ tự ưu tiên):
 
 ### 3.3 Lưu Trữ & Dọn Dẹp Dữ Liệu (Data Persistence & Retention)
 
-#### 3.3.1 Cấu Trúc Bảng `metric_snapshots`
+#### 3.3.1 Cấu Trúc Bảng `metric_logs`
 
 | Cột | Kiểu | Mô tả |
 |---|---|---|
@@ -343,15 +343,15 @@ Quy tắc chọn (theo thứ tự ưu tiên):
 **Index bắt buộc:**
 
 ```sql
-CREATE INDEX idx_metric_device_time ON metric_snapshots (device_id, timestamp);
-CREATE INDEX idx_metric_time ON metric_snapshots (timestamp);
+CREATE INDEX idx_metric_device_time ON metric_logs (device_id, timestamp);
+CREATE INDEX idx_metric_time ON metric_logs (timestamp);
 ```
 
 #### 3.3.2 Data Retention Policy
 
 | Loại dữ liệu | Thời gian giữ chi tiết | Hành động sau hạn |
 |---|---|---|
-| `metric_snapshots` (chi tiết) | **14 ngày** | Cron job chạy hàng đêm: tổng hợp (rollup) thành `metric_hourly` / `metric_daily`, rồi **xóa** bản ghi chi tiết > 14 ngày. |
+| `metric_logs` (chi tiết) | **14 ngày** | Cron job chạy hàng đêm: tổng hợp (rollup) thành `metric_hourly` / `metric_daily`, rồi **xóa** bản ghi chi tiết > 14 ngày. |
 | `metric_hourly` (tổng hợp theo giờ) | **90 ngày** | Rollup tiếp thành `metric_daily`, xóa > 90 ngày. |
 | `metric_daily` (tổng hợp theo ngày) | **365 ngày** | Giữ vĩnh viễn hoặc archive ra CSV/Backup. |
 | `device_logs` | **90 ngày** | Xóa vật lý. |
@@ -363,14 +363,14 @@ CREATE INDEX idx_metric_time ON metric_snapshots (timestamp);
 ```
 Mỗi đêm lúc 02:00 UTC:
 ┌──────────────────────────────────────────────────────────┐
-│ 1. SELECT FROM metric_snapshots                          │
+│ 1. SELECT FROM metric_logs                          │
 │    WHERE timestamp < NOW() - INTERVAL 14 DAY             │
 │    GROUP BY device_id, DATE(timestamp), HOUR(timestamp)  │
 │    → INSERT INTO metric_hourly                           │
 │      (device_id, date, hour, avg_latency, max_loss,      │
 │       avg_cpu, avg_ram, total_in_octets, total_out_octets)│
 │                                                          │
-│ 2. DELETE FROM metric_snapshots                          │
+│ 2. DELETE FROM metric_logs                          │
 │    WHERE timestamp < NOW() - INTERVAL 14 DAY;           │
 │                                                          │
 │ 3. Tương tự: metric_hourly > 90 ngày → metric_daily     │
@@ -659,7 +659,7 @@ SELECT
         2
     ) AS uptime_percent
 FROM (
-    -- Logic tính duration_minutes dựa trên status_changes hoặc metric_snapshots
+    -- Logic tính duration_minutes dựa trên status_changes hoặc metric_logs
     -- ...
 ) sub
 WHERE device_id = ? AND timestamp BETWEEN ? AND ?
@@ -705,7 +705,7 @@ $$
 | **Online** | `COUNT(*) WHERE healthStatus = 'ONLINE'` | `devices` |
 | **Offline** | `COUNT(*) WHERE healthStatus = 'OFFLINE'` | `devices` |
 | **Warning** | `COUNT(*) WHERE healthStatus IN ('WARNING', 'DEGRADED')` | `devices` |
-| **Tỷ lệ Uptime trung bình** | Trung bình uptime% toàn mạng (24h) | `metric_snapshots` |
+| **Tỷ lệ Uptime trung bình** | Trung bình uptime% toàn mạng (24h) | `metric_logs` |
 | **Alert đang mở** | `COUNT(*) WHERE status IN ('TRIGGERED', 'ACKNOWLEDGED')` | `alerts` |
 
 ### 6.3 Time-Series DTO Cho Biểu Đồ (Chart.js)
@@ -820,78 +820,93 @@ Mọi endpoint API phải trả về response theo định dạng sau:
 ```
 com.network.network_monitor/
 ├── NetworkMonitorApplication.java
-├── config/
+├── config/                    → @Configuration (Async · WebSocket/STOMP · Security · Scheduler)
 │   ├── AsyncConfig.java
 │   ├── WebSocketConfig.java
 │   ├── SecurityConfig.java
 │   └── SchedulerConfig.java
-├── domain/
-│   ├── entity/
-│   │   ├── Device.java
-│   │   ├── MonitoringConfig.java
-│   │   ├── MetricSnapshot.java
-│   │   ├── Alert.java
-│   │   ├── User.java
-│   │   ├── Role.java
-│   │   └── NotificationLog.java
-│   ├── enums/
-│   │   ├── DeviceType.java
-│   │   ├── DeviceStatus.java
-│   │   ├── HealthStatus.java
-│   │   ├── AlertType.java
-│   │   ├── AlertSeverity.java
-│   │   ├── AlertStatus.java
-│   │   └── NotificationChannel.java
-│   └── dto/
-│       ├── request/
-│       │   ├── CreateDeviceRequest.java
-│       │   └── UpdateDeviceRequest.java
-│       └── response/
-│           ├── DeviceResponse.java
-│           ├── DashboardSummaryResponse.java
-│           └── TimeSeriesResponse.java
-├── repository/
+├── controller/                → REST API endpoints (@RestController)
+│   ├── DeviceController.java
+│   ├── AlertController.java
+│   ├── DashboardController.java
+│   └── AuthController.java
+├── dto/                       → Transport objects + Bean Validation
+│   ├── request/
+│   │   ├── CreateDeviceRequest.java
+│   │   └── UpdateDeviceRequest.java
+│   └── response/
+│       ├── DeviceResponse.java
+│       ├── DashboardSummaryResponse.java
+│       └── TimeSeriesResponse.java
+├── enums/                     → Domain enums
+│   ├── DeviceType.java
+│   ├── DeviceStatus.java
+│   ├── HealthStatus.java
+│   ├── AlertType.java
+│   ├── AlertSeverity.java
+│   ├── AlertStatus.java
+│   └── NotificationChannel.java
+├── entity/                    → JPA @Entity
+│   ├── Device.java
+│   ├── MetricLog.java
+│   ├── Alert.java
+│   ├── MonitoringConfig.java
+│   ├── DeviceLog.java
+│   ├── User.java
+│   ├── Role.java
+│   └── NotificationLog.java
+├── repository/                → Spring Data JPA interfaces
 │   ├── DeviceRepository.java
-│   ├── MetricSnapshotRepository.java
+│   ├── MetricLogRepository.java
 │   ├── AlertRepository.java
+│   ├── MonitoringConfigRepository.java
 │   ├── UserRepository.java
 │   └── NotificationLogRepository.java
-├── service/
+├── service/                   → Business logic (@Service) — Interface trước
 │   ├── DeviceService.java
 │   ├── MonitoringService.java
 │   ├── AlertService.java
 │   ├── NotificationService.java
 │   ├── MetricsAggregationService.java
-│   └── DashboardService.java
-├── engine/
-│   ├── polling/
-│   │   ├── ProbingStrategy.java          (interface)
-│   │   ├── IcmpPingStrategy.java
-│   │   ├── TcpPortCheckStrategy.java
-│   │   ├── SnmpQueryStrategy.java
-│   │   └── PollingScheduler.java
-│   ├── health/
-│   │   └── HealthEvaluator.java
-│   └── alert/
-│       ├── AlertEngine.java
-│       ├── AlertDeDuplication.java
-│       └── AlertThrottling.java
-├── notification/
+│   ├── DashboardService.java
+│   └── impl/                  → Concrete implementations
+│       ├── DeviceServiceImpl.java
+│       ├── MonitoringServiceImpl.java
+│       ├── AlertServiceImpl.java
+│       ├── NotificationServiceImpl.java
+│       ├── MetricsAggregationServiceImpl.java
+│       └── DashboardServiceImpl.java
+├── strategy/                  → Probing Strategy Pattern (Interface + impl)
+│   ├── ProbingStrategy.java          (interface)
+│   ├── ProbeResult.java
+│   ├── PingStrategy.java
+│   ├── TcpPortStrategy.java
+│   └── SnmpStrategy.java
+├── event/                     → Domain events + listeners
+│   ├── DeviceStatusChangedEvent.java
+│   ├── DeviceOfflineEvent.java
+│   ├── MetricCollectedEvent.java
+│   └── listener/
+│       ├── WebSocketEventListener.java
+│       └── AlertEventListener.java
+├── scheduler/                 → Worker/Polling Engine (Virtual Threads Java 25)
+│   ├── PollingScheduler.java
+│   ├── HealthEvaluator.java
+│   └── AlertEngine.java
+├── notification/              → Multi-channel notifiers
 │   ├── NotificationDispatcher.java
 │   ├── TelegramNotifier.java
 │   ├── EmailNotifier.java
 │   └── WebSocketNotifier.java
-├── controller/
-│   ├── DeviceController.java
-│   ├── AlertController.java
-│   ├── DashboardController.java
-│   └── AuthController.java
-├── exception/
+├── exception/                 → GlobalExceptionHandler + ErrorCode
 │   ├── GlobalExceptionHandler.java
+│   ├── ErrorCode.java
+│   ├── BusinessException.java
 │   ├── DuplicateIpException.java
+│   ├── DuplicateMacException.java
 │   ├── DeviceNotFoundException.java
 │   └── DeviceTimeoutException.java
-└── util/
+└── util/                      → Validators + Network utils
     ├── IpValidator.java
     ├── MacValidator.java
     └── NetworkUtils.java
