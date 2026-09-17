@@ -164,8 +164,10 @@ stateDiagram-v2
 | — | `ACTIVE` | Tạo mới thiết bị | Bắt đầu thăm dò theo chu kỳ cấu hình. |
 | `ACTIVE` | `MAINTENANCE` | Admin chủ động chuyển | **Tạm ngừng** thăm dò. **Vô hiệu hóa** tất cả alert đang `TRIGGERED` cho thiết bị này. Ghi `DeviceLog` với `action=ENTER_MAINTENANCE`. |
 | `MAINTENANCE` | `ACTIVE` | Admin kết thúc bảo trì | **Tiếp tục** thăm dò. **Reset** bộ đếm consecutive failures về `0`. Ghi `DeviceLog` với `action=EXIT_MAINTENANCE`. |
-| `ACTIVE` / `MAINTENANCE` | `DECOMMISSIONED` | Admin xóa软 (soft delete) | **Dừng** thăm dò. **Đóng** tất cả alert đang mở. Đánh dấu `deletedAt` timestamp. **KHÔNG** xóa vật lý dữ liệu MetricLog (giữ nguyên lịch sử). |
-| `DECOMMISSIONED` | `ACTIVE` | Admin khôi phục | **Xóa** `deletedAt`. **Reset** health status về `UNKNOWN`. Bắt đầu thăm dò lại. |
+| `ACTIVE` / `MAINTENANCE` | `DECOMMISSIONED` | Admin xóa软 (soft delete) | **Dừng** thăm dò. **Đóng** tất cả alert đang mở. Đánh dấu `isDeleted = true` (mọi truy vấn bị lọc bởi `@SQLRestriction`). **KHÔNG** xóa vật lý dữ liệu MetricLog (giữ nguyên lịch sử). |
+| `DECOMMISSIONED` | `ACTIVE` | Admin khôi phục | **Gỡ** `isDeleted = false`. **Reset** health status về `UNKNOWN`. Bắt đầu thăm dò lại. |
+
+> **Lưu ý:** Soft delete triển khai bằng `@SQLDelete` + `@SQLRestriction("is_deleted = false")` trên `devices`, `users`, `roles`. Mọi truy vấn JPA tự động loại trừ bản ghi đã xóa.
 
 ### 2.3 Phân Vùng Quản Lý
 
@@ -207,7 +209,7 @@ Nếu `subnet` không được cung cấp, skip validation này.
 │  ┌─────────────────────────────────────┐            │
 │  │    Health Evaluator (per device)    │            │
 │  │    → Cập nhật MetricLog        │            │
-│  │    → Chuyển đổi HealthStatus        │            │
+│  │    → Chuyển đổi DeviceStatus        │       │
 │  │    → Kích hoạt Alert nếu cần       │            │
 │  └─────────────────────────────────────┘            │
 └─────────────────────────────────────────────────────┘
@@ -330,21 +332,18 @@ Quy tắc chọn (theo thứ tự ưu tiên):
 |---|---|---|
 | `id` | `BIGINT PK AUTO_INCREMENT` | Khóa chính. |
 | `device_id` | `BIGINT FK → devices.id` | Thiết bị liên quan. |
-| `timestamp` | `DATETIME NOT NULL` | Thời điểm đo đạc (UTC). |
-| `latency_ms` | `INT NULL` | Độ trễ RTT (ms), `NULL` nếu không đo được. |
-| `packet_loss_pct` | `DECIMAL(5,2) NULL` | Tỷ lệ mất gói (%). |
-| `cpu_usage_pct` | `DECIMAL(5,2) NULL` | CPU usage từ SNMP (%). |
-| `memory_usage_pct` | `DECIMAL(5,2) NULL` | RAM usage từ SNMP (%). |
-| `bandwidth_in_kbps` | `BIGINT NULL` | Lưu lượng vào (Kbps). |
-| `bandwidth_out_kbps` | `BIGINT NULL` | Lưu lượng ra (Kbps). |
-| `reachable` | `BOOLEAN NOT NULL` | Kết quả ping/check cuối cùng. |
-| `strategy_used` | `VARCHAR(30) NOT NULL` | Strategy đã dùng: `ICMP`, `TCP`, `SNMP`. |
+| `recorded_at` | `DATETIME NOT NULL` | Thời điểm đo đạc (UTC). |
+| `latency_ms` | `DOUBLE NULL` | Độ trễ RTT (ms), `NULL` nếu không đo được. |
+| `packet_loss_rate` | `DECIMAL(5,2) NULL` | Tỷ lệ mất gói (%). |
+| `is_reachable` | `BOOLEAN NOT NULL` | Kết quả ping/check cuối cùng. |
+
+> **Ghi chú (bổ sung sau):** Các cột SNMP riêng (CPU, RAM, bandwidth) chưa có ở MetricLog — sẽ bổ sung cùng phase SNMP (xem §3.2.3). Index phản ánh theo entity:
 
 **Index bắt buộc:**
 
 ```sql
-CREATE INDEX idx_metric_device_time ON metric_logs (device_id, timestamp);
-CREATE INDEX idx_metric_time ON metric_logs (timestamp);
+CREATE INDEX idx_metric_device_time ON metric_logs (device_id, recorded_at);
+CREATE INDEX idx_metric_recorded_at ON metric_logs (recorded_at);
 ```
 
 #### 3.3.2 Data Retention Policy
@@ -382,15 +381,17 @@ Mỗi đêm lúc 02:00 UTC:
 
 ## 4. Máy Trạng Thái & Đánh Giá Sức Khỏe
 
-### 4.1 HealthStatus Enum
+### 4.1 DeviceStatus Enum (gộp Health + Asset)
 
-| Trạng thái | Ý nghĩa | Màu Dashboard |
-|---|---|---|
-| `UNKNOWN` | Thiết bị mới tạo, chưa có dữ liệu đo đạc đầu tiên. | Xám (`#9E9E9E`) |
-| `ONLINE` | Phản hồi tốt, latency trong ngưỡng an toàn (< 100ms), không có packet loss đáng kể. | Xanh lá (`#4CAF50`) |
-| `WARNING` | Phản hồi chậm (latency > ngưỡng cảnh báo) hoặc packet loss nhẹ (10%–30%). | Vàng (`#FF9800`) |
-| `DEGRADED` | Phản hồi rất chậm (latency > ngưỡng nghiêm trọng) hoặc packet loss cao (30%–70%). | Cam (`#FF5722`) |
-| `OFFLINE` | Hoàn toàn không nhận được phản hồi sau N lần thử liên tiếp. | Đỏ (`#F44336`) |
+> **Quyết định thiết kế:** Hệ thống dùng **MỘT enum `DeviceStatus` duy nhất** cho cả trạng thái sức khỏe (health) lẫn trạng thái vận hành (asset), đặt trên cột `devices.status`. Không tách riêng enum `HealthStatus` như thiết kế ban đầu. Không có trạng thái `DEGRADED` — các ngưỡng nghiêm trọng (latency/loss critical) được gộp vào `WARNING`.
+
+| Trạng thái | Ý nghĩa | Nhóm | Màu Dashboard |
+|---|---|---|---|
+| `UNKNOWN` | Thiết bị mới tạo, chưa có dữ liệu đo đạc đầu tiên. | health | Xám (`#9E9E9E`) |
+| `ONLINE` | Phản hồi tốt, latency trong ngưỡng an toàn (< 100ms), không có packet loss đáng kể. | health | Xanh lá (`#4CAF50`) |
+| `WARNING` | Phản hồi chậm (latency > ngưỡng cảnh báo), packet loss cao, hoặc mức nghiêm trọng (latency > critical / loss ≥ critical). | health | Vàng (`#FF9800`) |
+| `OFFLINE` | Hoàn toàn không nhận được phản hồi sau N lần thử liên tiếp. | health | Đỏ (`#F44336`) |
+| `MAINTENANCE` | Thiết bị đang bảo trì — **vô hiệu hóa 100% cảnh báo**. | asset | Xanh dương (`#2196F3`) |
 
 ### 4.2 Thuật Toán Đánh Giá Sức Khỏe (Health Evaluation Logic)
 
@@ -399,9 +400,9 @@ Mỗi đêm lúc 02:00 UTC:
 | Tham số | Mặc định | Ghi chú |
 |---|---|---|
 | `latency.warning` | `100ms` | Latency > giá trị này → `WARNING`. |
-| `latency.critical` | `200ms` | Latency > giá trị này → `DEGRADED`. |
+| `latency.critical` | `200ms` | Latency > giá trị này → `WARNING` (gộp, không có `DEGRADED`). |
 | `packet_loss.warning` | `10%` | Packet loss ≥ giá trị này → `WARNING`. |
-| `packet_loss.critical` | `30%` | Packet loss ≥ giá trị này → `DEGRADED`. |
+| `packet_loss.critical` | `30%` | Packet loss ≥ giá trị này → `WARNING` (gộp, không có `DEGRADED`). |
 | `consecutive_failures` | `3` | Số lần thất bại liên tiếp trước khi chuyển `OFFLINE`. |
 | `consecutive_success` | `2` | Số lần thành công liên tiếp trước khi chuyển `ONLINE` (hồi phục). |
 
@@ -413,7 +414,7 @@ Mỗi đêm lúc 02:00 UTC:
 FUNCTION evaluateHealth(device, probeResult):
     config = device.monitoringConfig OR defaultThresholds
 
-    IF device.status == DECOMMISSIONED:
+    IF device.isDeleted == TRUE:   // tương đương DECOMMISSIONED (soft delete)
         RETURN UNKNOWN
 
     IF probeResult.reachable == FALSE:
@@ -421,13 +422,13 @@ FUNCTION evaluateHealth(device, probeResult):
         device.consecutiveSuccess = 0
 
         IF device.consecutiveFailures >= config.consecutiveFailures
-           AND device.healthStatus != OFFLINE:
+           AND device.status != OFFLINE:
             newStatus = OFFLINE
             TRIGGER_ALERT(device, OFFLINE)
             EMIT_STATUS_CHANGE(device, newStatus)
-            device.healthStatus = newStatus
+            device.status = newStatus
 
-        RETURN device.healthStatus  // Giữ nguyên nếu chưa đủ N lần
+        RETURN device.status  // Giữ nguyên nếu chưa đủ N lần
 
     // probeResult.reachable == TRUE
     device.consecutiveSuccess += 1
@@ -438,26 +439,26 @@ FUNCTION evaluateHealth(device, probeResult):
     loss    = probeResult.packetLossPercent
 
     IF latency > config.latencyCritical OR loss >= config.packetLossCritical:
-        newStatus = DEGRADED
+        newStatus = WARNING   // critical gộp vào WARNING
     ELSE IF latency > config.latencyWarning OR loss >= config.packetLossWarning:
         newStatus = WARNING
     ELSE:
         newStatus = ONLINE
 
     // Chuyển đổi trạng thái (State Transition)
-    IF device.healthStatus == OFFLINE AND newStatus == ONLINE:
+    IF device.status == OFFLINE AND newStatus == ONLINE:
         // Cần consecutive_success liên tiếp
         IF device.consecutiveSuccess >= config.consecutiveSuccess:
             TRIGGER_RECOVERY_ALERT(device)
             EMIT_STATUS_CHANGE(device, ONLINE)
-            device.healthStatus = ONLINE
+            device.status = ONLINE
         // Nếu chưa đủ → giữ OFFLINE
 
-    ELSE IF device.healthStatus != newStatus:
+    ELSE IF device.status != newStatus:
         EMIT_STATUS_CHANGE(device, newStatus)
-        device.healthStatus = newStatus
+        device.status = newStatus
 
-    RETURN device.healthStatus
+    RETURN device.status
 ```
 
 ### 4.3 Chống Báo Động Giả (Flapping / Consecutive Failure Threshold)
@@ -481,22 +482,15 @@ stateDiagram-v2
     UNKNOWN --> ONLINE : Ping đầu tiên thành công
     UNKNOWN --> OFFLINE : Ping đầu tiên thất bại + 3 lần liên tiếp
 
-    ONLINE --> WARNING : Latency > 100ms
-    ONLINE --> DEGRADED : Latency > 200ms hoặc Loss ≥ 30%
+    ONLINE --> WARNING : Latency > 100ms hoặc Loss ≥ 10%
     ONLINE --> CHECK_FAILURES : Ping thất bại lần 1-2
 
-    WARNING --> ONLINE : Ping OK, latency < 100ms
-    WARNING --> DEGRADED : Latency tăng hoặc loss tăng
+    WARNING --> ONLINE : Ping OK, latency < 100ms, loss < 10%
     WARNING --> CHECK_FAILURES : Ping thất bại lần 1-2
-
-    DEGRADED --> WARNING : Cải thiện nhẹ
-    DEGRADED --> ONLINE : Ping OK, tất cả ngưỡng OK
-    DEGRADED --> CHECK_FAILURES : Ping thất bại lần 1-2
 
     CHECK_FAILURES --> OFFLINE : 3 lần thất bại liên tiếp
     CHECK_FAILURES --> ONLINE : 2 lần thành công liên tiếp
-    CHECK_FAILURES --> WARNING : Ping OK nhưng latency cao
-    CHECK_FAILURES --> DEGRADED : Ping OK nhưng loss cao
+    CHECK_FAILURES --> WARNING : Ping OK nhưng latency/loss cao
 
     OFFLINE --> CHECK_FAILURES : Ping thành công lần 1
 ```
@@ -524,7 +518,7 @@ stateDiagram-v2
 
 | Trạng thái | Ý nghĩa | Điều kiện chuyển |
 |---|---|---|
-| `TRIGGERED` | Sự cố mới được phát hiện. | `HealthEvaluator` phát hiện thiết bị chuyển sang `OFFLINE` / `DEGRADED` lần đầu. |
+| `TRIGGERED` | Sự cố mới được phát hiện. | `HealthEvaluator` phát hiện thiết bị chuyển sang `OFFLINE` / `WARNING` lần đầu. |
 | `ACKNOWLEDGED` | Quản trị viên đã xác nhận, đang xử lý. | Admin nhấn nút "Acknowledge" trên Web Dashboard. |
 | `RESOLVED` | Sự cố đã được giải quyết. | **Tự động:** Thiết bị phục hồi về `ONLINE` sau `consecutive_success` lần. **Thủ công:** Admin đóng alert. |
 
@@ -534,22 +528,23 @@ stateDiagram-v2
 |---|---|---|
 | `id` | `BIGINT PK` | Khóa chính. |
 | `device_id` | `BIGINT FK` | Thiết bị liên quan. |
+| `acknowledged_by` | `BIGINT FK NULL` | Admin đã xác nhận (`users.id`). |
 | `alert_type` | `ENUM` | `OFFLINE`, `HIGH_LATENCY`, `PACKET_LOSS`, `CPU_OVERLOAD`, `MEMORY_OVERLOAD`, `PORT_DOWN`. |
 | `severity` | `ENUM` | `INFO`, `WARNING`, `CRITICAL`. |
 | `status` | `ENUM` | `TRIGGERED`, `ACKNOWLEDGED`, `RESOLVED`. |
 | `message` | `TEXT` | Mô tả chi tiết sự cố (đã interpolated). |
-| `triggered_at` | `DATETIME` | Thời điểm phát hiện. |
-| `acknowledged_at` | `DATETIME NULL` | Thời điểm xác nhận. |
-| `resolved_at` | `DATETIME NULL` | Thời điểm giải quyết. |
-| `acknowledged_by` | `BIGINT FK NULL` | Admin đã xác nhận. |
 | `repeat_count` | `INT DEFAULT 0` | Số lần nhắc nhở đã gửi (cho throttling). |
 | `next_repeat_at` | `DATETIME NULL` | Thời điểm gửi nhắc nhở tiếp theo. |
+| `created_at` | `DATETIME NOT NULL` | Thời điểm phát hiện (= `triggered_at`). |
+| `acknowledged_at` | `DATETIME NULL` | Thời điểm xác nhận. |
+| `resolved_at` | `DATETIME NULL` | Thời điểm giải quyết. |
 
 **Index bắt buộc:**
 
 ```sql
 CREATE INDEX idx_alert_device_status ON alerts (device_id, status);
-CREATE INDEX idx_alert_triggered ON alerts (triggered_at);
+CREATE INDEX idx_alert_triggered ON alerts (created_at);
+CREATE INDEX idx_alert_severity ON alerts (severity);
 ```
 
 ### 5.3 Chống Spam Cảnh Báo (De-duplication & Throttling)
@@ -654,7 +649,7 @@ $$
 SELECT
     device_id,
     ROUND(
-        SUM(CASE WHEN health_status = 'ONLINE' THEN duration_minutes ELSE 0 END)
+        SUM(CASE WHEN status = 'ONLINE' THEN duration_minutes ELSE 0 END)
         / NULLIF(SUM(duration_minutes), 0) * 100,
         2
     ) AS uptime_percent
@@ -701,10 +696,10 @@ $$
 
 | Widget | Dữ liệu | Nguồn |
 |---|---|---|
-| **Tổng thiết bị** | `COUNT(*) FROM devices WHERE deletedAt IS NULL` | `devices` |
-| **Online** | `COUNT(*) WHERE healthStatus = 'ONLINE'` | `devices` |
-| **Offline** | `COUNT(*) WHERE healthStatus = 'OFFLINE'` | `devices` |
-| **Warning** | `COUNT(*) WHERE healthStatus IN ('WARNING', 'DEGRADED')` | `devices` |
+| **Tổng thiết bị** | `COUNT(*) FROM devices WHERE is_deleted = false` | `devices` |
+| **Online** | `COUNT(*) WHERE status = 'ONLINE'` | `devices` |
+| **Offline** | `COUNT(*) WHERE status = 'OFFLINE'` | `devices` |
+| **Warning** | `COUNT(*) WHERE status = 'WARNING'` | `devices` |
 | **Tỷ lệ Uptime trung bình** | Trung bình uptime% toàn mạng (24h) | `metric_logs` |
 | **Alert đang mở** | `COUNT(*) WHERE status IN ('TRIGGERED', 'ACKNOWLEDGED')` | `alerts` |
 
@@ -841,11 +836,12 @@ com.network.network_monitor/
 ├── enums/                     → Domain enums
 │   ├── DeviceType.java
 │   ├── DeviceStatus.java
-│   ├── HealthStatus.java
 │   ├── AlertType.java
 │   ├── AlertSeverity.java
 │   ├── AlertStatus.java
-│   └── NotificationChannel.java
+│   ├── NotificationChannel.java
+│   ├── ProbingMethod.java
+│   └── DeviceLogAction.java
 ├── entity/                    → JPA @Entity
 │   ├── Device.java
 │   ├── MetricLog.java
@@ -860,7 +856,9 @@ com.network.network_monitor/
 │   ├── MetricLogRepository.java
 │   ├── AlertRepository.java
 │   ├── MonitoringConfigRepository.java
+│   ├── DeviceLogRepository.java
 │   ├── UserRepository.java
+│   ├── RoleRepository.java
 │   └── NotificationLogRepository.java
 ├── service/                   → Business logic (@Service) — Interface trước
 │   ├── DeviceService.java
@@ -972,7 +970,7 @@ spring.websocket.websocket-path=/ws
 | 1 | IP validation regex đúng chuẩn IPv4, bỏ qua loopback/ràng buộc cấm | ☐ |
 | 2 | MAC validation regex đúng, tự động uppercase | ☐ |
 | 3 | DeviceStatus state machine đúng flow (ACTIVE ↔ MAINTENANCE → DECOMMISSIONED) | ☐ |
-| 4 | HealthStatus dùng consecutive_failures/success, KHÔNG flip-flop ngay lập tức | ☐ |
+| 4 | DeviceStatus dùng consecutive_failures/success, KHÔNG flip-flop ngay lập tức | ☐ |
 | 5 | Alert de-duplication: chỉ 1 alert active per device per type | ☐ |
 | 6 | Alert throttling: respect cooldown, không spam Telegram/Email | ☐ |
 | 7 | Email chỉ gửi cho severity=CRITICAL, lần đầu (không repeat) | ☐ |

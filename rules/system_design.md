@@ -139,11 +139,11 @@ sequenceDiagram
         P-->>VT: ProbeResult{latency, loss, reachable}
         VT->>E: evaluate(device, result)
         E->>E: Cập nhật counter (ConcurrentHashMap)
-        E-->>VT: HealthStatus (ONLINE/WARNING/...)
+        E-->>VT: DeviceStatus (ONLINE/WARNING/...)
         alt Trạng thái thay đổi
             E->>EB: publish(DeviceStatusChangedEvent)
             EB->>WS: push /topic/device-status/{id}
-            E->>DB: UPDATE devices SET health_status
+            E->>DB: UPDATE devices SET status
         end
         E->>DB: INSERT metric_logs
     end
@@ -237,10 +237,10 @@ DeviceService (interface)
 | Yêu cầu | Chi tiết |
 |---|---|
 | **Kế thừa** | `JpaRepository<Entity, Long>` (không phải `CrudRepository`) để có sẵn `Pageable` support. |
-| **Query method** | Sprint Data method name: `findByIpAddressAndDeletedAtIsNull(...)`, `findByHealthStatus(...)`. |
-| **Time-series** | Dùng `@Query` với `DATE_SUB(NOW(), INTERVAL n HOUR)` để lấy cửa sổ 1h/24h/7d. |
+| **Query method** | Sprint Data method name: `findByIpAddress(...)`, `existsByMacAddress(...)`, `findByStatus(...)`. |
+| **Time-series** | Dùng `@Query` với `DATE_SUB(NOW(), INTERVAL n HOUR)` để lấy cửa sổ 1h/24h/7d trên cột `recorded_at`. |
 | **Aggregation** | Dùng projection interface (`DashboardSummaryProjection`) thay vì native JSON thủ công. |
-| **Index** | Đảm bảo index trên cột thường dùng `WHERE`: `(device_id, timestamp)`, `(device_id, status)`. |
+| **Index** | Đảm bảo index trên cột thường dùng `WHERE`: `(device_id, recorded_at)`, `(device_id, status)`. |
 
 **Ví dụ repository query time-series:**
 
@@ -280,25 +280,17 @@ public interface MetricLogRepository extends JpaRepository<MetricLog, Long> {
                 └────┬─────┘
                      │ probe đầu tiên thành công
                      ▼
-                ┌──────────┐   latency > threshold   ┌───────────┐
-        ┌──────►│  ONLINE  │ ───────────────────────► │  WARNING  │──┐
-        │       └────┬─────┘                          └─────┬─────┘  │
-        │            │                                      │        │
-        │            │      ┌───────────────────────────────┘        │
-        │            │      │                                        
-        │            │      │  loss ≥ critical hoặc latency ≥ critical
-        │            │      ▼                                        │
-        │            │  ┌───────────┐                                │
-        │            │  │ DEGRADED  │◄──────────────────────────────┘
-        │            │  └─────┬─────┘
-        │            │        │
-        │   success  │        │    fail ≥ N lần liên tiếp
-        │   (≥ M lần)│        ▼
-        │            │  ┌───────────┐
-        │            └──│  OFFLINE  │
-        │               └─────┬─────┘
-        │                     │
-        └─────────────────────┘
+                ┌──────────┐  latency > warning hoặc loss ≥ warning   ┌───────────┐
+        ┌──────►│  ONLINE  │ ─────────────────────────────────────────► │  WARNING  │
+        │       └────┬─────┘                                            └─────┬─────┘
+        │            │   ◄────────── latency/loss về mức bình thường ────────┘
+        │            │
+        │   success  │   fail ≥ N lần liên tiếp
+        │   (≥ M lần)│
+        │            ▼
+        │       ┌───────────┐
+        └───────│  OFFLINE  │
+                └───────────┘
 ```
 
 #### 3.2.1 Thuật Toán Chống Flapping (Chống Báo Động Giả)
@@ -365,8 +357,8 @@ FUNCTION evaluate(deviceId, probeResult):
 ```java
 public record DeviceStatusChangedEvent(
     Long deviceId,
-    HealthStatus oldStatus,
-    HealthStatus newStatus,
+    DeviceStatus oldStatus,
+    DeviceStatus newStatus,
     String reason,        // "consecutive_failure", "latency_high", "maintenance_on", ...
     LocalDateTime triggeredAt
 ) {}
@@ -378,7 +370,7 @@ public record DeviceStatusChangedEvent(
 @EventListener(DeviceStatusChangedEvent.class)
 public void onStatusChanged(DeviceStatusChangedEvent event) {
     websocketNotifier.pushDeviceStatus(event);  // /topic/device-status/{deviceId}
-    if (event.newStatus() == HealthStatus.OFFLINE) {
+    if (event.newStatus() == DeviceStatus.OFFLINE) {
         alertEngine.evaluate(event);             // tạo alert + de-dup
     }
 }
@@ -392,7 +384,7 @@ public void onStatusChanged(DeviceStatusChangedEvent event) {
 | **Cảnh báo** | **VÔ HIỆU HÓA 100%** — không tạo `Alert`, không gửi Telegram/Email, không spam WebSocket. |
 | **Hiển thị** | Dashboard hiển thị badge `🛠 Maintenance`. |
 | **Counter** | Reset failCounters khi vào/ra maintenance (tránh alert "sau" khi ra). |
-| **Trạng thái** | Độc lập với HealthStatus — thiết bị có `DeviceStatus.MAINTENANCE` (asset-level) và `HealthStatus` (health-level). Khi `DeviceStatus == MAINTENANCE`, HealthStatus không được chuyển sang `OFFLINE`. |
+| **Trạng thái** | DeviceStatus là enum gộp — giá trị `MAINTENANCE` (asset-level) nằm cùng enum với `ONLINE/WARNING/OFFLINE/UNKNOWN` (health-level). Khi `DeviceStatus == MAINTENANCE`, không được chuyển sang `OFFLINE`. Soft delete (`is_deleted = true`) đóng vai trò tương đương `DECOMMISSIONED`. |
 
 ---
 
@@ -556,7 +548,7 @@ QUY TẮC CỨNG:
 
 ```
 Nếu business yêu cầu kiểm tra trạng thái tức thì:
-  1. Đọc health_status + counter hiện tại (in-memory / DB).
+  1. Đọc status + counter hiện tại (in-memory / DB).
   2. Trả về value MỚI NHẤT đã có — KHÔNG trigger probe mới.
   3. Dữ liệu probe luôn là eventual consistency (tối đa 1 chu kỳ poll).
   4. Nếu thật sự cần probe sync (rare), dùng CompletableFuture with timeout —

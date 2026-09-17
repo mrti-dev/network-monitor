@@ -61,7 +61,7 @@ public class Device {
     @Column(name = "ip_address", nullable = false, unique = true, length = 45)
     private String ipAddress;
 
-    @Column(name = "mac_address", length = 17)
+    @Column(name = "mac_address", nullable = false, unique = true, length = 17)
     private String macAddress;
 
     @Enumerated(EnumType.STRING)
@@ -72,12 +72,14 @@ public class Device {
     @Column(name = "status", nullable = false, length = 20)
     private DeviceStatus status;
 
-    @Column(name = "location", length = 255)
+    @Column(name = "location", nullable = false, length = 255)
     private String location;
 
-    @Builder.Default
-    @Column(name = "is_monitored", nullable = false)
-    private Boolean isMonitored = true;
+    @Column(name = "subnet", length = 18)
+    private String subnet;
+
+    @Column(name = "description", columnDefinition = "TEXT")
+    private String description;
 
     @Builder.Default
     @Column(name = "is_deleted", nullable = false)
