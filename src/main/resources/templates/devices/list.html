@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Danh sách thiết bị</title>
+    <!-- Tabler Core -->
+    <link rel="stylesheet" th:href="@{/dist/css/tabler.min.css}">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <script th:src="@{/dist/js/tabler.min.js}" defer></script>
+</head>
+<body class="layout-fluid">
+    <div class="page">
+        <!-- Navbar -->
+        <header class="navbar navbar-expand-md d-print-none" data-bs-theme="dark">
+            <div class="container-xl">
+                <h1 class="navbar-brand navbar-brand-autodark d-none-navbar-horizontal pe-0 pe-md-3">
+                    <a href="/devices" class="text-decoration-none">
+                        <i class="bi bi-hdd-network"></i> Hệ thống Quản lý và Giám sát Thiết bị Mạng
+                    </a>
+                </h1>
+                <div class="navbar-nav flex-row order-md-last">
+                    <div class="nav-item active">
+                        <a href="/devices" class="nav-link"><span class="nav-link-title">Thiết bị</span></a>
+                    </div>
+                    <div class="nav-item">
+                        <a href="/alerts" class="nav-link"><span class="nav-link-title">Cảnh báo</span></a>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div class="page-wrapper">
+            <!-- Page header -->
+            <div class="page-header d-print-none">
+                <div class="container-xl">
+                    <div class="row g-2 align-items-center">
+                        <div class="col">
+                            <h2 class="page-title text-primary"><i class="bi bi-list-ul me-2"></i> Danh sách thiết bị</h2>
+                        </div>
+                        <div class="col-auto ms-auto d-print-none">
+                            <div class="btn-list">
+                                <a href="#" class="btn btn-success d-none d-sm-inline-block" data-bs-toggle="modal" data-bs-target="#scanModal">
+                                    <i class="bi bi-search me-2"></i> Quét mạng nội bộ
+                                </a>
+                                <a href="/devices/new" class="btn btn-primary d-none d-sm-inline-block">
+                                    <i class="bi bi-plus-circle me-2"></i> Thêm thiết bị
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Page body -->
+            <div class="page-body">
+                <div class="container-xl">
+
+                    <div th:if="${successMessage}" class="alert alert-success alert-dismissible" role="alert">
+                        <div class="d-flex">
+                            <div><i class="bi bi-check-circle me-2"></i></div>
+                            <div th:text="${successMessage}"></div>
+                        </div>
+                        <a class="btn-close" data-bs-dismiss="alert" aria-label="close"></a>
+                    </div>
+                    
+                    <div th:if="${errorMessage}" class="alert alert-danger alert-dismissible" role="alert">
+                        <div class="d-flex">
+                            <div><i class="bi bi-exclamation-triangle me-2"></i></div>
+                            <div th:text="${errorMessage}"></div>
+                        </div>
+                        <a class="btn-close" data-bs-dismiss="alert" aria-label="close"></a>
+                    </div>
+
+                    <div class="card">
+                        <div class="table-responsive">
+                            <table class="table table-vcenter card-table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Tên</th>
+                                        <th>IP</th>
+                                        <th>MAC</th>
+                                        <th>Loại</th>
+                                        <th>Trạng thái</th>
+                                        <th>Vị trí</th>
+                                        <th>Giám sát</th>
+                                        <th class="w-1 text-center">Thao tác</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr th:each="device : ${devices}">
+                                        <td class="text-secondary" th:text="${device.id}"></td>
+                                        <td class="fw-bold" th:text="${device.name}"></td>
+                                        <td th:text="${device.ipAddress}"></td>
+                                        <td class="text-secondary" th:text="${device.macAddress}"></td>
+                                        <td class="text-secondary" th:text="${device.deviceType}"></td>
+                                        <td>
+                                            <span class="badge bg-green-lt" th:if="${device.status?.name() == 'ONLINE'}">ONLINE</span>
+                                            <span class="badge bg-red-lt" th:if="${device.status?.name() == 'OFFLINE'}">OFFLINE</span>
+                                            <span class="badge bg-yellow-lt" th:if="${device.status?.name() == 'WARNING'}">WARNING</span>
+                                            <span class="badge bg-secondary-lt" th:if="${device.status?.name() == 'UNKNOWN'}">UNKNOWN</span>
+                                            <span class="badge bg-blue-lt" th:if="${device.status?.name() == 'MAINTENANCE'}">MAINTENANCE</span>
+                                        </td>
+                                        <td class="text-secondary" th:text="${device.location}"></td>
+                                        <td>
+                                            <span class="badge bg-green-lt" th:if="${device.isMonitored}"><i class="bi bi-check-circle me-1"></i> Bật</span>
+                                            <span class="badge bg-secondary-lt" th:unless="${device.isMonitored}"><i class="bi bi-x-circle me-1"></i> Tắt</span>
+                                        </td>
+                                        <td>
+                                            <div class="btn-list flex-nowrap justify-content-center">
+                                                <a th:href="@{/devices/metrics/{id}(id=${device.id})}" class="btn btn-outline-info btn-icon" title="Biểu đồ giám sát">
+                                                    <i class="bi bi-activity"></i>
+                                                </a>
+                                                <a th:href="@{/devices/edit/{id}(id=${device.id})}" class="btn btn-outline-primary btn-icon" title="Sửa">
+                                                    <i class="bi bi-pencil"></i>
+                                                </a>
+                                                <a th:href="@{/devices/toggle/{id}(id=${device.id})}" 
+                                                   class="btn btn-icon" th:classappend="${device.isMonitored} ? 'btn-outline-warning' : 'btn-outline-success'" 
+                                                   th:title="${device.isMonitored ? 'Tắt giám sát' : 'Bật giám sát'}">
+                                                    <i class="bi" th:classappend="${device.isMonitored} ? 'bi-pause-circle' : 'bi-play-circle'"></i>
+                                                </a>
+                                                <a th:href="@{/devices/delete/{id}(id=${device.id})}" class="btn btn-outline-danger btn-icon" title="Xóa"
+                                                   onclick="return confirm('Bạn có chắc chắn muốn xóa thiết bị này?');">
+                                                    <i class="bi bi-trash"></i>
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <tr th:if="${#lists.isEmpty(devices)}">
+                                        <td colspan="9" class="text-center py-4 text-secondary">Không có thiết bị nào.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Quét Mạng -->
+    <div class="modal modal-blur fade" id="scanModal" tabindex="-1" role="dialog" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title"><i class="bi bi-radar me-2"></i> Quét thiết bị trong mạng LAN</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <p class="text-secondary">Hệ thống sẽ tự động phát hiện dải mạng LAN (Subnet) mà máy chủ đang kết nối và tiến hành quét (Ping/ARP Sweep) để tìm các thiết bị đang online.</p>
+            </div>
+            <div id="scanResult" class="alert d-none"></div>
+            <div class="text-center d-none" id="scanLoading">
+                <div class="spinner-border text-primary" role="status"></div>
+                <div class="mt-2 text-secondary">Hệ thống đang dò tìm mạng và quét đa luồng. Vui lòng đợi trong giây lát...</div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-link link-secondary me-auto" data-bs-dismiss="modal">Đóng</button>
+            <button type="button" class="btn btn-success" id="startScanBtn" onclick="startScan()">Bắt đầu quét tự động</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+    function startScan() {
+        const loading = document.getElementById('scanLoading');
+        const resultBox = document.getElementById('scanResult');
+        const scanBtn = document.getElementById('startScanBtn');
+
+        loading.classList.remove('d-none');
+        resultBox.classList.add('d-none');
+        scanBtn.disabled = true;
+
+        fetch('/api/discovery/scan', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ subnet: "" })
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error("HTTP Status " + response.status);
+            }
+            return response.json();
+        })
+        .then(data => {
+            loading.classList.add('d-none');
+            scanBtn.disabled = false;
+            
+            if (data.success) {
+                resultBox.classList.remove('d-none', 'alert-danger');
+                resultBox.classList.add('alert-success');
+                resultBox.innerHTML = `Quét thành công! Tìm thấy <strong>${data.data.discovered}</strong> thiết bị. <br>Đã thêm mới: <strong>${data.data.added}</strong> <br>Bỏ qua: <strong>${data.data.skipped}</strong> <br><small class="text-secondary">Đang tải lại trang...</small>`;
+                
+                setTimeout(() => {
+                    window.location.reload();
+                }, 3000);
+            } else {
+                resultBox.classList.remove('d-none', 'alert-success');
+                resultBox.classList.add('alert-danger');
+                let errorMsg = 'Lỗi không xác định';
+                if (data.errors && Array.isArray(data.errors)) {
+                    errorMsg = data.errors.join(", ");
+                }
+                resultBox.innerHTML = 'Lỗi: ' + errorMsg;
+            }
+        })
+        .catch(error => {
+            loading.classList.add('d-none');
+            scanBtn.disabled = false;
+            resultBox.classList.remove('d-none', 'alert-success');
+            resultBox.classList.add('alert-danger');
+            resultBox.innerHTML = 'Lỗi kết nối tới API: ' + error.message;
+        });
+    }
+    </script>
+</body>
+</html>
