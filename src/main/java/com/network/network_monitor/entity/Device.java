@@ -35,6 +35,7 @@ import lombok.Setter;
 /**
  * JPA Entity map với bảng {@code devices} — thiết bị mạng được quản lý.
  * Áp dụng Soft Delete: mọi truy vấn mặc định loại trừ bản ghi đã xóa.
+ * Sử dụng cờ {@code isMonitored} để bật/tắt giám sát thay vì xóa khi thiết bị ngắt kết nối.
  */
 @Getter
 @Setter
@@ -45,7 +46,8 @@ import lombok.Setter;
 @Table(name = "devices", indexes = {
         @Index(name = "idx_device_status", columnList = "status"),
         @Index(name = "idx_device_type", columnList = "device_type"),
-        @Index(name = "idx_device_ip", columnList = "ip_address")
+        @Index(name = "idx_device_ip", columnList = "ip_address"),
+        @Index(name = "idx_device_monitored", columnList = "is_monitored")
 })
 @SQLDelete(sql = "UPDATE devices SET is_deleted = true WHERE id = ?")
 @SQLRestriction("is_deleted = false")
@@ -55,31 +57,29 @@ public class Device {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "name", nullable = false, length = 100)
+    @Column(name = "name", length = 100)
     private String name;
 
     @Column(name = "ip_address", nullable = false, unique = true, length = 45)
     private String ipAddress;
 
-    @Column(name = "mac_address", nullable = false, unique = true, length = 17)
+    @Column(name = "mac_address", length = 17)
     private String macAddress;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "device_type", nullable = false, length = 30)
+    @Column(name = "device_type", length = 30)
     private DeviceType deviceType;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     private DeviceStatus status;
 
-    @Column(name = "location", nullable = false, length = 255)
+    @Column(name = "location", length = 255)
     private String location;
 
-    @Column(name = "subnet", length = 18)
-    private String subnet;
-
-    @Column(name = "description", columnDefinition = "TEXT")
-    private String description;
+    @Builder.Default
+    @Column(name = "is_monitored", nullable = false)
+    private Boolean isMonitored = true;
 
     @Builder.Default
     @Column(name = "is_deleted", nullable = false)
@@ -94,17 +94,17 @@ public class Device {
     @OneToOne(mappedBy = "device", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private MonitoringConfig monitoringConfig;
 
-    @OneToMany(mappedBy = "device", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "device", fetch = FetchType.LAZY)
     @Builder.Default
     private List<MetricLog> metricLogs = new ArrayList<>();
 
-    @OneToMany(mappedBy = "device", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    @Builder.Default
-    private List<DeviceLog> deviceLogs = new ArrayList<>();
-
-    @OneToMany(mappedBy = "device", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "device", fetch = FetchType.LAZY)
     @Builder.Default
     private List<Alert> alerts = new ArrayList<>();
+
+    @OneToMany(mappedBy = "device", fetch = FetchType.LAZY)
+    @Builder.Default
+    private List<DeviceLog> deviceLogs = new ArrayList<>();
 
     @PrePersist
     public void prePersist() {

@@ -1,6 +1,5 @@
 package com.network.network_monitor.entity;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 import jakarta.persistence.Column;
@@ -24,6 +23,7 @@ import lombok.Setter;
 /**
  * JPA Entity map với bảng {@code metric_logs} — bản ghi số liệu đo đạc
  * (time-series) của thiết bị. Không áp dụng soft delete (audit/time-series).
+ * Dọn dẹp qua cron job tự động cho dữ liệu > 7 ngày.
  */
 @Getter
 @Setter
@@ -32,7 +32,7 @@ import lombok.Setter;
 @Builder
 @Entity
 @Table(name = "metric_logs", indexes = {
-        @Index(name = "idx_metric_device_time", columnList = "device_id, recorded_at"),
+        @Index(name = "idx_device_time", columnList = "device_id, recorded_at"),
         @Index(name = "idx_metric_recorded_at", columnList = "recorded_at")
 })
 public class MetricLog {
@@ -48,8 +48,8 @@ public class MetricLog {
     @Column(name = "latency_ms")
     private Double latencyMs;
 
-    @Column(name = "packet_loss_rate", precision = 5, scale = 2)
-    private BigDecimal packetLossRate;
+    @Column(name = "packet_loss")
+    private Double packetLoss;
 
     @Column(name = "is_reachable", nullable = false)
     private Boolean isReachable;

@@ -6,6 +6,7 @@ package com.network.network_monitor.enums;
 public enum DeviceLogAction {
 
     CREATE,
+    AUTO_DISCOVER,
     UPDATE,
     ENTER_MAINTENANCE,
     EXIT_MAINTENANCE,

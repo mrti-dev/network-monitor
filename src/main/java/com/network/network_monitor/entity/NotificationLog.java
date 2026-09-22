@@ -28,6 +28,7 @@ import lombok.Setter;
 /**
  * JPA Entity map với bảng {@code notification_logs} — nhật ký gửi thông báo
  * (Telegram/Email/WebSocket) để chống spam và audit. Không áp dụng soft delete.
+ * Cấm xóa thủ công.
  */
 @Getter
 @Setter
@@ -53,15 +54,15 @@ public class NotificationLog {
     @Column(name = "channel", nullable = false, length = 20)
     private NotificationChannel channel;
 
+    @Lob
+    @Column(name = "message")
+    private String message;
+
+    @Column(name = "status", nullable = false, length = 20)
+    private String status;
+
     @Column(name = "sent_at", nullable = false)
     private LocalDateTime sentAt;
-
-    @Column(name = "success", nullable = false)
-    private Boolean success;
-
-    @Lob
-    @Column(name = "error_message")
-    private String errorMessage;
 
     @PrePersist
     public void prePersist() {

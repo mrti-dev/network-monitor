@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 
 import com.network.network_monitor.entity.User;
+import com.network.network_monitor.enums.Role;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
@@ -15,11 +16,5 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     boolean existsByUsername(String username);
 
-    Optional<User> findByEmail(String email);
-
-    boolean existsByEmail(String email);
-
-    List<User> findByEnabledTrue();
-
-    List<User> findByRolesNameIn(List<String> roleNames);
+    List<User> findByRole(Role role);
 }

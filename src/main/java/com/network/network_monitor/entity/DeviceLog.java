@@ -28,7 +28,7 @@ import lombok.Setter;
 /**
  * JPA Entity map với bảng {@code device_logs} — nhật ký sự kiện,
  * thay đổi trạng thái và hành động hệ thống trên thiết bị.
- * Không áp dụng soft delete (audit log).
+ * Không áp dụng soft delete (audit log). Cấm xóa thủ công.
  */
 @Getter
 @Setter
@@ -55,8 +55,11 @@ public class DeviceLog {
     private DeviceLogAction action;
 
     @Lob
-    @Column(name = "message")
-    private String message;
+    @Column(name = "description")
+    private String description;
+
+    @Column(name = "performed_by")
+    private Long performedBy;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

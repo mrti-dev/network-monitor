@@ -1,24 +1,18 @@
 package com.network.network_monitor.entity;
 
-import java.math.BigDecimal;
-
 import com.network.network_monitor.enums.ProbingMethod;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.MapsId;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
-
-import org.hibernate.annotations.SQLDelete;
-import org.hibernate.annotations.SQLRestriction;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -28,8 +22,8 @@ import lombok.Setter;
 
 /**
  * JPA Entity map với bảng {@code monitoring_configs} — cấu hình giám sát
- * riêng cho từng thiết bị (chu kỳ quét, ngưỡng cảnh báo, SNMP).
- * Quan hệ 1-1 với {@link Device}; khóa ngoại {@code device_id} nằm ở bảng này.
+ * riêng cho từng thiết bị (chu kỳ quét, ngưỡng cảnh báo, chiến lược thăm dò).
+ * Quan hệ 1-1 với {@link Device} dùng shared primary key (device_id).
  */
 @Getter
 @Setter
@@ -41,49 +35,29 @@ import lombok.Setter;
 public class MonitoringConfig {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @Column(name = "device_id")
+    private Long deviceId;
 
-    @OneToOne
-    @JoinColumn(name = "device_id", unique = true, nullable = false)
+    @OneToOne(fetch = jakarta.persistence.FetchType.LAZY)
+    @MapsId
+    @JoinColumn(name = "device_id")
     private Device device;
 
+    @Builder.Default
+    @Column(name = "ping_interval", nullable = false)
+    private Integer pingInterval = 15;
+
+    @Builder.Default
+    @Column(name = "timeout_ms", nullable = false)
+    private Integer timeoutMs = 2000;
+
+    @Builder.Default
+    @Column(name = "latency_threshold", nullable = false)
+    private Double latencyThreshold = 150.0;
+
     @Enumerated(EnumType.STRING)
-    @Column(name = "probing_method", nullable = false, length = 20)
-    private ProbingMethod probingMethod;
-
-    @Column(name = "custom_interval_ms")
-    private Long customIntervalMs;
-
-    @Column(name = "tcp_ports", length = 255)
-    private String tcpPorts;
-
-    @Column(name = "latency_warning_ms")
-    private Integer latencyWarningMs;
-
-    @Column(name = "latency_critical_ms")
-    private Integer latencyCriticalMs;
-
-    @Column(name = "packet_loss_warning_pct", precision = 5, scale = 2)
-    private BigDecimal packetLossWarningPct;
-
-    @Column(name = "packet_loss_critical_pct", precision = 5, scale = 2)
-    private BigDecimal packetLossCriticalPct;
-
-    @Column(name = "consecutive_failures")
-    private Integer consecutiveFailures;
-
-    @Column(name = "consecutive_success")
-    private Integer consecutiveSuccess;
-
-    @Column(name = "snmp_enabled")
-    private Boolean snmpEnabled;
-
-    @Column(name = "snmp_community", length = 100)
-    private String snmpCommunity;
-
-    @Column(name = "snmp_version", length = 10)
-    private String snmpVersion;
+    @Column(name = "strategy_type", nullable = false, length = 20)
+    private ProbingMethod strategyType;
 
     @Column(name = "created_at", updatable = false)
     private java.time.LocalDateTime createdAt;
