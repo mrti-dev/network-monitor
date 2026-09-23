@@ -26,11 +26,11 @@ public class AlertServiceImpl implements AlertService {
     @Override
     @Transactional
     public void triggerAlert(Device device, String message, AlertType type) {
-        // Kiểm tra xem đã có alert nào chưa xử lý cho thiết bị này không
-        java.util.List<Alert> activeAlerts = alertRepository.findByStatusIn(java.util.List.of(AlertStatus.TRIGGERED, AlertStatus.ACKNOWLEDGED));
-        boolean hasActive = activeAlerts.stream().anyMatch(a -> a.getDevice().getId().equals(device.getId()));
+        // Kiểm tra xem đã có alert loại này đang mở chưa (TRIGGERED hoặc ACKNOWLEDGED)
+        java.util.List<Alert> activeAlerts = alertRepository.findByDeviceIdAndAlertTypeAndStatusIn(
+                device.getId(), type, java.util.List.of(AlertStatus.TRIGGERED, AlertStatus.ACKNOWLEDGED));
                 
-        if (!hasActive) {
+        if (activeAlerts.isEmpty()) {
             Alert alert = Alert.builder()
                     .device(device)
                     .alertType(type)
@@ -46,9 +46,9 @@ public class AlertServiceImpl implements AlertService {
 
     @Override
     @Transactional
-    public void resolveAlerts(Device device) {
-        java.util.List<Alert> activeAlerts = alertRepository.findByDeviceIdAndStatus(device.getId(), AlertStatus.TRIGGERED);
-        activeAlerts.addAll(alertRepository.findByDeviceIdAndStatus(device.getId(), AlertStatus.ACKNOWLEDGED));
+    public void resolveAlerts(Device device, AlertType type) {
+        java.util.List<Alert> activeAlerts = alertRepository.findByDeviceIdAndAlertTypeAndStatusIn(
+                device.getId(), type, java.util.List.of(AlertStatus.TRIGGERED, AlertStatus.ACKNOWLEDGED));
                 
         for (Alert alert : activeAlerts) {
             alert.setStatus(AlertStatus.RESOLVED);

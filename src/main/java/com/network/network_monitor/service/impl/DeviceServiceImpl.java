@@ -17,6 +17,7 @@ import com.network.network_monitor.exception.ResourceNotFoundException;
 import com.network.network_monitor.repository.DeviceRepository;
 import com.network.network_monitor.service.DeviceService;
 
+import com.network.network_monitor.scheduler.HealthEvaluator;
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -24,6 +25,7 @@ import lombok.RequiredArgsConstructor;
 public class DeviceServiceImpl implements DeviceService {
 
     private final DeviceRepository deviceRepository;
+    private final HealthEvaluator healthEvaluator;
 
     @Override
     public List<DeviceResponseDto> getAllDevices() {
@@ -78,7 +80,10 @@ public class DeviceServiceImpl implements DeviceService {
             }
 
             device.setName(formDto.getName());
-            device.setIpAddress(formDto.getIpAddress());
+            if (!device.getIpAddress().equals(formDto.getIpAddress())) {
+                healthEvaluator.resetCounters(device.getId());
+                device.setIpAddress(formDto.getIpAddress());
+            }
             device.setMacAddress(formDto.getMacAddress());
             device.setDeviceType(formDto.getDeviceType());
             device.setLocation(formDto.getLocation());
@@ -93,6 +98,7 @@ public class DeviceServiceImpl implements DeviceService {
         if (!deviceRepository.existsById(id)) {
             throw new ResourceNotFoundException("Không tìm thấy thiết bị với ID: " + id);
         }
+        healthEvaluator.resetCounters(id);
         deviceRepository.deleteById(id);
     }
 
@@ -102,6 +108,9 @@ public class DeviceServiceImpl implements DeviceService {
         Device device = deviceRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy thiết bị với ID: " + id));
         device.setIsMonitored(!device.getIsMonitored());
+        if (!device.getIsMonitored()) {
+            healthEvaluator.resetCounters(id);
+        }
         deviceRepository.save(device);
     }
 

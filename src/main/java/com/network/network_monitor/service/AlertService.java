@@ -5,5 +5,5 @@ import com.network.network_monitor.enums.AlertType;
 
 public interface AlertService {
     void triggerAlert(Device device, String message, AlertType type);
-    void resolveAlerts(Device device);
+    void resolveAlerts(Device device, AlertType type);
 }

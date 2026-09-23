@@ -20,4 +20,7 @@ public interface AlertRepository extends JpaRepository<Alert, Long> {
 
     Optional<Alert> findTopByDeviceIdAndAlertTypeAndStatusInOrderByTriggeredAtDesc(
             Long deviceId, AlertType alertType, Collection<AlertStatus> statuses);
+
+    List<Alert> findByDeviceIdAndAlertTypeAndStatusIn(
+            Long deviceId, AlertType alertType, Collection<AlertStatus> statuses);
 }

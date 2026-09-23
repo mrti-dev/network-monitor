@@ -91,6 +91,10 @@ public class Device {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    @jakarta.persistence.Version
+    @Column(name = "version")
+    private Integer version;
+
     @OneToOne(mappedBy = "device", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private MonitoringConfig monitoringConfig;
 
