@@ -32,6 +32,7 @@ build/
 ### VS Code ###
 .vscode/
 
-
-
 opencode.json
+
+.antigravity
+
