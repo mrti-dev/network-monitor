@@ -1,5 +1,18 @@
 package com.network.network_monitor.controller;
 
+import com.network.network_monitor.dto.DeviceFormDto;
+import com.network.network_monitor.dto.MetricLogDto;
+import com.network.network_monitor.enums.DeviceType;
+import com.network.network_monitor.exception.DuplicateResourceException;
+import com.network.network_monitor.service.DeviceService;
+import jakarta.validation.Valid;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
@@ -8,15 +21,8 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
-
-import com.network.network_monitor.dto.DeviceFormDto;
-import com.network.network_monitor.enums.DeviceType;
-import com.network.network_monitor.exception.DuplicateResourceException;
-import com.network.network_monitor.service.DeviceService;
-
-import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
 
 @Controller
 @RequestMapping({"/", "/devices"})
@@ -24,12 +30,20 @@ import lombok.RequiredArgsConstructor;
 public class DeviceWebController {
 
     private final DeviceService deviceService;
-    private final com.network.network_monitor.repository.DeviceRepository deviceRepository;
-    private final com.network.network_monitor.repository.MetricLogRepository metricLogRepository;
 
     @GetMapping
-    public String listDevices(Model model) {
-        model.addAttribute("devices", deviceService.getAllDevices());
+    public String listDevices(@RequestParam(defaultValue = "0") int page,
+                              @RequestParam(defaultValue = "15") int size,
+                              Model model) {
+        if (page < 0) page = 0;
+        if (size < 1) size = 1;
+        if (size > 100) size = 100;
+
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt", "id"));
+        var devicePage = deviceService.getAllDevices(pageable);
+        int lastPage = Math.max(0, devicePage.getTotalPages() - 1);
+        if (page > lastPage) devicePage = deviceService.getAllDevices(PageRequest.of(lastPage, size, pageable.getSort()));
+        model.addAttribute("devicePage", devicePage);
         return "devices/list";
     }
 
@@ -56,7 +70,7 @@ public class DeviceWebController {
             model.addAttribute("deviceTypes", DeviceType.values());
             return "devices/form";
         }
-        
+
         try {
             deviceService.saveDevice(form);
             redirectAttributes.addFlashAttribute("successMessage", "Lưu thông tin thiết bị thành công!");
@@ -64,12 +78,8 @@ public class DeviceWebController {
             model.addAttribute("deviceTypes", DeviceType.values());
             model.addAttribute("errorMessage", e.getMessage());
             return "devices/form";
-        } catch (Exception e) {
-            model.addAttribute("deviceTypes", DeviceType.values());
-            model.addAttribute("errorMessage", "Lỗi hệ thống: " + e.getMessage());
-            return "devices/form";
         }
-        
+
         return "redirect:/devices";
     }
 
@@ -89,21 +99,16 @@ public class DeviceWebController {
 
     @GetMapping("/metrics/{id}")
     public String viewMetrics(@PathVariable Long id, Model model) {
-        com.network.network_monitor.entity.Device device = deviceRepository.findById(id)
-            .orElseThrow(() -> new IllegalArgumentException("Invalid device Id:" + id));
-        
-        java.util.List<com.network.network_monitor.entity.MetricLog> rawMetrics = metricLogRepository.findByDeviceIdOrderByRecordedAtDesc(id);
-        java.util.List<com.network.network_monitor.entity.MetricLog> metrics = new java.util.ArrayList<>(rawMetrics);
-        
-        // Limit to latest 30 metrics for chart to not overload UI
-        if (metrics.size() > 30) {
-            metrics = metrics.subList(0, 30);
-        }
-        
-        java.util.Collections.reverse(metrics); // chronological order for chart
+        DeviceFormDto device = deviceService.getDeviceFormById(id);
+        List<MetricLogDto> metrics = deviceService.getDeviceMetrics(id);
+        Double threshold = deviceService.getLatencyThreshold(id);
+
+        List<MetricLogDto> mutableMetrics = new ArrayList<>(metrics);
+        Collections.reverse(mutableMetrics); // Thứ tự thời gian tăng dần cho biểu đồ
 
         model.addAttribute("device", device);
-        model.addAttribute("metrics", metrics);
+        model.addAttribute("metrics", mutableMetrics);
+        model.addAttribute("latencyThreshold", threshold);
         return "devices/metrics";
     }
 }

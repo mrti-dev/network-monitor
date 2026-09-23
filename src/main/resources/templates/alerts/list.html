@@ -61,10 +61,11 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr th:each="alert : ${alerts}">
+                                    <tr th:each="alert : ${alertPage.content}">
                                         <td class="text-secondary" th:text="${alert.id}"></td>
                                         <td class="fw-bold">
-                                            <a th:href="@{/devices/metrics/{id}(id=${alert.device.id})}" th:text="${alert.device.name}"></a>
+                                            <a th:if="${!alert.isDeviceDeleted}" th:href="@{/devices/metrics/{id}(id=${alert.deviceId})}" th:text="${alert.deviceName}"></a>
+                                            <span th:if="${alert.isDeviceDeleted}" th:text="${alert.deviceName + ' (Đã xóa)'}" class="text-muted fst-italic"></span>
                                         </td>
                                         <td class="text-secondary" th:text="${alert.alertType}"></td>
                                         <td>
@@ -81,11 +82,32 @@
                                         <td class="text-secondary" th:text="${#temporals.format(alert.triggeredAt, 'dd/MM/yyyy HH:mm:ss')}"></td>
                                         <td class="text-secondary" th:text="${alert.resolvedAt != null ? #temporals.format(alert.resolvedAt, 'dd/MM/yyyy HH:mm:ss') : '-'}"></td>
                                     </tr>
-                                    <tr th:if="${#lists.isEmpty(alerts)}">
+                                    <tr th:if="${#lists.isEmpty(alertPage.content)}">
                                         <td colspan="8" class="text-center py-4 text-secondary">Chưa có cảnh báo nào trong hệ thống.</td>
                                     </tr>
                                 </tbody>
                             </table>
+                        </div>
+                        <div class="card-footer d-flex align-items-center">
+                            <p class="m-0 text-secondary">
+                                Hiển thị <span th:text="${alertPage.totalElements == 0 ? 0 : alertPage.number * alertPage.size + 1}"></span>
+                                đến <span th:text="${(alertPage.number * alertPage.size) + alertPage.numberOfElements}"></span>
+                                của <span th:text="${alertPage.totalElements}"></span> mục
+                            </p>
+                            <ul class="pagination m-0 ms-auto" th:if="${alertPage.totalPages > 1}">
+                                <li class="page-item" th:classappend="${alertPage.first} ? 'disabled'">
+                                    <a class="page-link" th:href="${alertPage.first} ? '#' : @{/alerts(page=${alertPage.number - 1}, size=${alertPage.size})}" tabindex="-1">Trước</a>
+                                </li>
+                                <li class="page-item" th:each="i : ${#numbers.sequence(
+                                    (alertPage.number - 2 < 0 ? 0 : alertPage.number - 2),
+                                    (alertPage.number + 2 >= alertPage.totalPages ? alertPage.totalPages - 1 : alertPage.number + 2))}"
+                                    th:classappend="${alertPage.number == i} ? 'active'" th:if="${alertPage.totalPages > 0}">
+                                    <a class="page-link" th:href="@{/alerts(page=${i}, size=${alertPage.size})}" th:text="${i + 1}"></a>
+                                </li>
+                                <li class="page-item" th:classappend="${alertPage.last} ? 'disabled'">
+                                    <a class="page-link" th:href="${alertPage.last} ? '#' : @{/alerts(page=${alertPage.number + 1}, size=${alertPage.size})}">Sau</a>
+                                </li>
+                            </ul>
                         </div>
                     </div>
                 </div>

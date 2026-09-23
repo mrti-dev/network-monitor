@@ -91,7 +91,7 @@
                                                     <span class="badge bg-green-lt" th:if="${metrics[i].isReachable}">Thành công</span>
                                                     <span class="badge bg-red-lt" th:unless="${metrics[i].isReachable}">Thất bại (Timeout)</span>
                                                 </td>
-                                                <td class="fw-bold" th:classappend="${metrics[i].latencyMs != null && metrics[i].latencyMs > 150 ? 'text-danger' : 'text-success'}" 
+                                                <td class="fw-bold" th:classappend="${metrics[i].latencyMs != null && metrics[i].latencyMs > latencyThreshold ? 'text-danger' : 'text-success'}"
                                                     th:text="${metrics[i].latencyMs != null ? metrics[i].latencyMs + ' ms' : '-'}">
                                                 </td>
                                                 <td class="text-secondary" th:text="${metrics[i].packetLoss != null ? metrics[i].packetLoss + '%' : '-'}"></td>
@@ -116,7 +116,7 @@
         /*<![CDATA[*/
         document.addEventListener("DOMContentLoaded", function () {
             var rawMetrics = /*[[${metrics}]]*/ [];
-            
+
             var categories = rawMetrics.map(function(m) {
                 // format time
                 var date = new Date(m.recordedAt);
@@ -124,7 +124,7 @@
             });
 
             var dataSeries = rawMetrics.map(function(m) {
-                return m.isReachable ? m.latencyMs : 0; // if timeout, render as 0
+                return m.isReachable ? m.latencyMs : null; // if timeout, render as missing data (null) to show gaps
             });
 
             var options = {
@@ -137,6 +137,16 @@
                     animations: { enabled: false },
                 },
                 fill: { opacity: 1 },
+                annotations: {
+                    position: 'back',
+                    yaxis: [{
+                        y: /*[[${latencyThreshold}]]*/ null,
+                        borderColor: '#ff6b6b',
+                        label: {
+                            text: 'Ngưỡng cảnh báo'
+                        }
+                    }]
+                },
                 stroke: {
                     width: 2,
                     lineCap: "round",
@@ -163,7 +173,7 @@
                 colors: ["#206bc4"],
                 legend: { show: false },
             };
-            
+
             if (document.getElementById('chart-latency')) {
                 var chart = new ApexCharts(document.getElementById('chart-latency'), options);
                 chart.render();

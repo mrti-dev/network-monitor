@@ -1,14 +1,15 @@
 package com.network.network_monitor.notification;
 
-import java.time.LocalDateTime;
-
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
-
-import com.network.network_monitor.entity.Alert;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
+import org.springframework.transaction.support.TransactionTemplate;
 import com.network.network_monitor.entity.NotificationLog;
+import com.network.network_monitor.enums.NotificationChannel;
+import com.network.network_monitor.repository.AlertRepository;
 import com.network.network_monitor.repository.NotificationLogRepository;
-
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -16,28 +17,23 @@ import lombok.extern.slf4j.Slf4j;
 @Component
 @RequiredArgsConstructor
 public class NotificationDispatcher {
-
     private final NotificationLogRepository notificationLogRepository;
+    private final AlertRepository alertRepository;
+    private final PlatformTransactionManager transactionManager;
 
-    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
-    public void dispatch(Alert alert) {
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void dispatch(AlertCreated event) {
         try {
-            log.info("Chuẩn bị gửi cảnh báo: [{}] Thiết bị {} - {}", alert.getSeverity(), alert.getDevice().getIpAddress(), alert.getMessage());
-            
-            // TODO: Gửi qua Telegram/Email/WebSocket tại đây
-            // Hiện tại chưa triển khai, dùng trạng thái NOT_IMPLEMENTED
-            
-            NotificationLog logEntry = NotificationLog.builder()
-                    .alert(alert)
-                    .channel(com.network.network_monitor.enums.NotificationChannel.TELEGRAM)
-                    .message("Chưa cấu hình Telegram/Email. Cảnh báo: " + alert.getMessage())
+            TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+            transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+            transaction.executeWithoutResult(status -> notificationLogRepository.save(NotificationLog.builder()
+                    .alert(alertRepository.getReferenceById(event.alertId()))
+                    .channel(NotificationChannel.TELEGRAM)
+                    .message("Chưa cấu hình Telegram/Email. Cảnh báo: " + event.message())
                     .status("NOT_IMPLEMENTED")
-                    .sentAt(LocalDateTime.now())
-                    .build();
-                    
-            notificationLogRepository.save(logEntry);
-        } catch (Exception e) {
-            log.error("Lỗi khi gửi thông báo cho cảnh báo ID {}: {}", alert.getId(), e.getMessage(), e);
+                    .build()));
+        } catch (RuntimeException e) {
+            log.error("Lỗi notification cho alert ID {}", event.alertId(), e);
         }
     }
 }

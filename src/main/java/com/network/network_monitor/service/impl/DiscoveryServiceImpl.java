@@ -3,7 +3,10 @@ package com.network.network_monitor.service.impl;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.InetAddress;
-import java.time.LocalDateTime;
+import com.network.network_monitor.dto.DiscoveryOutcome;
+import com.network.network_monitor.config.MonitoringDefaults;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.ConcurrencyFailureException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -13,18 +16,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import com.network.network_monitor.dto.ScanRequestDto;
 import com.network.network_monitor.dto.ScanResponseDto;
-import com.network.network_monitor.entity.Device;
-import com.network.network_monitor.entity.DeviceLog;
-import com.network.network_monitor.entity.MonitoringConfig;
-import com.network.network_monitor.enums.DeviceLogAction;
-import com.network.network_monitor.enums.DeviceStatus;
-import com.network.network_monitor.enums.ProbingMethod;
-import com.network.network_monitor.repository.DeviceLogRepository;
-import com.network.network_monitor.repository.DeviceRepository;
+
 import com.network.network_monitor.service.DiscoveryService;
 
 import lombok.RequiredArgsConstructor;
@@ -35,22 +30,21 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class DiscoveryServiceImpl implements DiscoveryService {
 
-    private final DeviceRepository deviceRepository;
-    private final DeviceLogRepository deviceLogRepository;
+    private final DiscoveryTransactionService transactionService;
+    private final MonitoringDefaults defaults;
 
     @Override
-    @Transactional
     public ScanResponseDto scanNetwork(ScanRequestDto request) {
         String targetSubnet = request.getSubnet();
         if (targetSubnet == null || targetSubnet.trim().isEmpty()) {
             targetSubnet = detectLocalSubnet();
             log.info("Không có Subnet truyền vào, tự động phát hiện dải mạng LAN: {}", targetSubnet);
         }
-        
+
         List<String> targetIps = getIpsInSubnet(targetSubnet);
-        
+
         List<ScanResponseDto.DiscoveredDevice> discoveredDevices = Collections.synchronizedList(new ArrayList<>());
-        
+
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
             List<Future<Void>> futures = new ArrayList<>();
             for (String ip : targetIps) {
@@ -71,64 +65,42 @@ public class DiscoveryServiceImpl implements DiscoveryService {
                 }
             }
         }
-        
-        int added = 0;
-        int skipped = 0;
-        
-        for (ScanResponseDto.DiscoveredDevice dev : discoveredDevices) {
-            if (deviceRepository.existsByIpAddress(dev.getIpAddress())) {
-                dev.setNew(false);
-                skipped++;
-            } else {
-                dev.setNew(true);
-                enrollDevice(dev, targetSubnet);
-                added++;
+
+        return persistDiscoveredDevices(discoveredDevices, targetSubnet);
+    }
+
+    ScanResponseDto persistDiscoveredDevices(List<ScanResponseDto.DiscoveredDevice> devices, String subnet) {
+        ScanResponseDto response = ScanResponseDto.builder().discovered(devices.size()).details(devices).build();
+        for (var device : devices) {
+            DiscoveryOutcome outcome;
+            try {
+                outcome = transactionService.processDiscoveredDevice(device, subnet);
+            } catch (ConcurrencyFailureException e) {
+                log.warn("Discovery IP {}: {}", device.getIpAddress(), e.getClass().getSimpleName());
+                outcome = DiscoveryOutcome.SKIPPED;
+            } catch (DataIntegrityViolationException e) {
+                log.warn("Discovery IP {}: {}", device.getIpAddress(), e.getClass().getSimpleName());
+                outcome = DiscoveryOutcome.FAILED;
+            } catch (RuntimeException e) {
+                log.error("Discovery thất bại cho IP {}", device.getIpAddress(), e);
+                outcome = DiscoveryOutcome.FAILED;
+            }
+            device.setOutcome(outcome);
+            device.setNew(outcome == DiscoveryOutcome.ADDED);
+            switch (outcome) {
+                case ADDED -> response.setAdded(response.getAdded() + 1);
+                case REACTIVATED -> response.setReactivated(response.getReactivated() + 1);
+                case SKIPPED -> response.setSkipped(response.getSkipped() + 1);
+                case FAILED -> response.setFailed(response.getFailed() + 1);
             }
         }
-        
-        return ScanResponseDto.builder()
-                .discovered(discoveredDevices.size())
-                .added(added)
-                .skipped(skipped)
-                .details(discoveredDevices)
-                .build();
+        return response;
     }
-    
-    private void enrollDevice(ScanResponseDto.DiscoveredDevice dev, String subnet) {
-        Device device = Device.builder()
-                .name("Auto-Discovered: " + dev.getIpAddress())
-                .ipAddress(dev.getIpAddress())
-                .macAddress(dev.getMacAddress())
-                .status(DeviceStatus.UNKNOWN)
-                .isMonitored(true)
-                .isDeleted(false)
-                .build();
-                
-        MonitoringConfig config = MonitoringConfig.builder()
-                .device(device)
-                .pingInterval(15)
-                .timeoutMs(2000)
-                .latencyThreshold(150.0)
-                .strategyType(ProbingMethod.ICMP)
-                .build();
-        device.setMonitoringConfig(config);
-        
-        deviceRepository.save(device);
-        
-        DeviceLog logEntry = DeviceLog.builder()
-                .device(device)
-                .action(DeviceLogAction.AUTO_DISCOVER)
-                .description("Discovered via sweep " + subnet)
-                .createdAt(LocalDateTime.now())
-                .build();
-        deviceLogRepository.save(logEntry);
-    }
-    
     private ScanResponseDto.DiscoveredDevice probe(String ip) {
         try {
             long startTime = System.currentTimeMillis();
             InetAddress inet = InetAddress.getByName(ip);
-            if (inet.isReachable(2000)) {
+            if (inet.isReachable(defaults.getTimeoutMs())) {
                 long latency = System.currentTimeMillis() - startTime;
                 String mac = getMacAddress(ip);
                 return ScanResponseDto.DiscoveredDevice.builder()
@@ -142,7 +114,7 @@ public class DiscoveryServiceImpl implements DiscoveryService {
         }
         return null;
     }
-    
+
     private String getMacAddress(String ip) {
         try {
             Process p = Runtime.getRuntime().exec("arp -a " + ip);
@@ -207,18 +179,18 @@ public class DiscoveryServiceImpl implements DiscoveryService {
             while (interfaces.hasMoreElements()) {
                 java.net.NetworkInterface networkInterface = interfaces.nextElement();
                 if (networkInterface.isLoopback() || !networkInterface.isUp()) continue;
-                
+
                 for (java.net.InterfaceAddress address : networkInterface.getInterfaceAddresses()) {
                     InetAddress inetAddress = address.getAddress();
                     if (inetAddress instanceof java.net.Inet4Address) {
                         String ip = inetAddress.getHostAddress();
                         int prefixLength = address.getNetworkPrefixLength();
-                        
+
                         // Calculate base network ip
                         int mask = 0xffffffff << (32 - prefixLength);
                         int ipInt = inetAddressToInt(ip);
                         int networkIp = ipInt & mask;
-                        
+
                         return intToInetAddress(networkIp) + "/" + prefixLength;
                     }
                 }

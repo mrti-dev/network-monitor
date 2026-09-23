@@ -1,11 +1,11 @@
 package com.network.network_monitor.entity;
 
 import com.network.network_monitor.enums.ProbingMethod;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.MapsId;
@@ -13,7 +13,7 @@ import jakarta.persistence.OneToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
-
+import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -38,42 +38,39 @@ public class MonitoringConfig {
     @Column(name = "device_id")
     private Long deviceId;
 
-    @OneToOne(fetch = jakarta.persistence.FetchType.LAZY)
+    @OneToOne(fetch = FetchType.LAZY)
     @MapsId
     @JoinColumn(name = "device_id")
     private Device device;
 
-    @Builder.Default
     @Column(name = "ping_interval", nullable = false)
-    private Integer pingInterval = 15;
+    private Integer pingInterval;
 
-    @Builder.Default
     @Column(name = "timeout_ms", nullable = false)
-    private Integer timeoutMs = 2000;
+    private Integer timeoutMs;
 
-    @Builder.Default
     @Column(name = "latency_threshold", nullable = false)
-    private Double latencyThreshold = 150.0;
+    private Double latencyThreshold;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "strategy_type", nullable = false, length = 20)
     private ProbingMethod strategyType;
 
     @Column(name = "created_at", updatable = false)
-    private java.time.LocalDateTime createdAt;
+    private LocalDateTime createdAt;
 
     @Column(name = "updated_at")
-    private java.time.LocalDateTime updatedAt;
+    private LocalDateTime updatedAt;
 
     @PrePersist
     public void prePersist() {
-        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now();
         this.createdAt = now;
         this.updatedAt = now;
     }
 
     @PreUpdate
     public void preUpdate() {
-        this.updatedAt = java.time.LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
     }
 }

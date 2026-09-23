@@ -1,17 +1,12 @@
 package com.network.network_monitor.entity;
 
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-
 import com.network.network_monitor.enums.DeviceStatus;
 import com.network.network_monitor.enums.DeviceType;
-
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.EnumType;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -22,15 +17,18 @@ import jakarta.persistence.OneToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
-
-import org.hibernate.annotations.SQLDelete;
-import org.hibernate.annotations.SQLRestriction;
-
+import jakarta.persistence.Version;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.SQLRestriction;
+import org.hibernate.jdbc.Expectation;
 
 /**
  * JPA Entity map với bảng {@code devices} — thiết bị mạng được quản lý.
@@ -49,7 +47,7 @@ import lombok.Setter;
         @Index(name = "idx_device_ip", columnList = "ip_address"),
         @Index(name = "idx_device_monitored", columnList = "is_monitored")
 })
-@SQLDelete(sql = "UPDATE devices SET is_deleted = true WHERE id = ?")
+@SQLDelete(sql = "UPDATE devices SET is_deleted = true, version = version + 1 WHERE id = ? AND version = ?", verify = Expectation.RowCount.class)
 @SQLRestriction("is_deleted = false")
 public class Device {
 
@@ -91,11 +89,11 @@ public class Device {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    @jakarta.persistence.Version
+    @Version
     @Column(name = "version")
     private Integer version;
 
-    @OneToOne(mappedBy = "device", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @OneToOne(mappedBy = "device", cascade = {CascadeType.PERSIST, CascadeType.MERGE}, fetch = FetchType.LAZY)
     private MonitoringConfig monitoringConfig;
 
     @OneToMany(mappedBy = "device", fetch = FetchType.LAZY)

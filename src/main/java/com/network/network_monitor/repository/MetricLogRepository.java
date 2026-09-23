@@ -14,10 +14,10 @@ import org.springframework.transaction.annotation.Transactional;
 @Repository
 public interface MetricLogRepository extends JpaRepository<MetricLog, Long> {
 
-    List<MetricLog> findByDeviceIdOrderByRecordedAtDesc(Long deviceId);
+    List<MetricLog> findTop30ByDeviceIdOrderByRecordedAtDescIdDesc(Long deviceId);
 
     @Modifying
     @Transactional
     @Query("DELETE FROM MetricLog m WHERE m.recordedAt < :before")
-    void deleteByRecordedAtBefore(LocalDateTime before);
+    int deleteByRecordedAtBefore(LocalDateTime before);
 }

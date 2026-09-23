@@ -7,17 +7,21 @@ import org.springframework.stereotype.Component;
 import com.network.network_monitor.entity.Device;
 import com.network.network_monitor.entity.MonitoringConfig;
 
+import com.network.network_monitor.config.MonitoringDefaults;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class PingStrategy implements ProbingStrategy {
+    private final MonitoringDefaults defaults;
 
     @Override
     public ProbeResult probe(Device device) {
         MonitoringConfig config = device.getMonitoringConfig();
-        int timeoutMs = config != null ? config.getTimeoutMs() : 2000;
-        
+        int timeoutMs = config != null && config.getTimeoutMs() != null ? config.getTimeoutMs() : defaults.getTimeoutMs();
+
         try {
             long startTime = System.currentTimeMillis();
             InetAddress inet = InetAddress.getByName(device.getIpAddress());

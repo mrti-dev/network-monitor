@@ -9,7 +9,9 @@ import java.util.List;
 public class ScanResponseDto {
     private int discovered;
     private int added;
+    private int reactivated;
     private int skipped;
+    private int failed;
     private List<DiscoveredDevice> details;
 
     @Data
@@ -19,5 +21,6 @@ public class ScanResponseDto {
         private String macAddress;
         private double latencyMs;
         private boolean isNew;
+        private DiscoveryOutcome outcome;
     }
 }
