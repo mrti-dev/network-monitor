@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import com.network.network_monitor.config.MonitoringDefaults;
 import com.network.network_monitor.dto.LatencyThresholdProjection;
 import com.network.network_monitor.entity.Device;
+import com.network.network_monitor.entity.MonitoringConfig;
 import com.network.network_monitor.exception.ResourceNotFoundException;
 import com.network.network_monitor.repository.DeviceRepository;
 
@@ -17,12 +18,18 @@ class DeviceMappingTest {
     private final DeviceServiceImpl service = new DeviceServiceImpl(repository, null, defaults, null, null);
 
     @Test
-    void editMapperNeverTouchesLazyConfig() {
+    void editMapperIncludesMonitoringConfig() {
         Device device = mock(Device.class);
+        MonitoringConfig config = MonitoringConfig.builder()
+                .pingInterval(30).timeoutMs(3000).latencyThreshold(200.0).build();
         when(device.getId()).thenReturn(1L);
+        when(device.getMonitoringConfig()).thenReturn(config);
         when(repository.findById(1L)).thenReturn(Optional.of(device));
-        assertThat(service.getDeviceFormById(1L).getId()).isEqualTo(1);
-        verify(device, never()).getMonitoringConfig();
+        var form = service.getDeviceFormById(1L);
+        assertThat(form.getId()).isEqualTo(1);
+        assertThat(form.getPingInterval()).isEqualTo(30);
+        assertThat(form.getTimeoutMs()).isEqualTo(3000);
+        assertThat(form.getLatencyThreshold()).isEqualTo(200);
     }
 
     @Test

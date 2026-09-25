@@ -28,8 +28,8 @@ public class NotificationDispatcher {
             transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
             transaction.executeWithoutResult(status -> notificationLogRepository.save(NotificationLog.builder()
                     .alert(alertRepository.getReferenceById(event.alertId()))
-                    .channel(NotificationChannel.TELEGRAM)
-                    .message("Chưa cấu hình Telegram/Email. Cảnh báo: " + event.message())
+                    .channel(NotificationChannel.WEBSOCKET)
+                    .message("Thông báo cảnh báo qua WebSocket: " + event.message())
                     .status("NOT_IMPLEMENTED")
                     .build()));
         } catch (RuntimeException e) {

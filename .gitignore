@@ -37,3 +37,9 @@ opencode.json
 .antigravity
 
 docs
+
+### Secrets — NEVER commit ###
+.env
+.env.local
+application-local.properties
+src/main/resources/application-local.properties

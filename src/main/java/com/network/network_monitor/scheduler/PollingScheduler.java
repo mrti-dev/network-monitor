@@ -2,13 +2,17 @@ package com.network.network_monitor.scheduler;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import com.network.network_monitor.entity.Device;
 import com.network.network_monitor.entity.MetricLog;
+import com.network.network_monitor.config.MonitoringDefaults;
 import com.network.network_monitor.repository.DeviceRepository;
 import com.network.network_monitor.repository.MetricLogRepository;
 import com.network.network_monitor.strategy.PingStrategy;
@@ -26,13 +30,25 @@ public class PollingScheduler {
     private final MetricLogRepository metricLogRepository;
     private final PingStrategy pingStrategy;
     private final HealthEvaluator healthEvaluator;
+    private final MonitoringDefaults defaults;
+    private final ConcurrentHashMap<Long, Long> lastPollNanos = new ConcurrentHashMap<>();
 
-    @Scheduled(fixedDelayString = "${poll.global.interval:15000}")
+    @Scheduled(fixedDelayString = "${poll.scheduler.tick-ms:1000}")
     public void pollDevices() {
         List<Device> monitoredDevices = deviceRepository.findByIsMonitoredTrue();
+        Set<Long> monitoredIds = monitoredDevices.stream().map(Device::getId).collect(java.util.stream.Collectors.toSet());
+        lastPollNanos.keySet().retainAll(monitoredIds);
+        long now = System.nanoTime();
         
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
             for (Device device : monitoredDevices) {
+                int interval = device.getMonitoringConfig() != null && device.getMonitoringConfig().getPingInterval() != null
+                        ? device.getMonitoringConfig().getPingInterval()
+                        : defaults.getPingInterval();
+                long intervalNanos = TimeUnit.SECONDS.toNanos(interval);
+                Long lastPoll = lastPollNanos.get(device.getId());
+                if (lastPoll != null && now - lastPoll < intervalNanos) continue;
+                lastPollNanos.put(device.getId(), now);
                 executor.submit(() -> {
                     try {
                         ProbeResult result = pingStrategy.probe(device);

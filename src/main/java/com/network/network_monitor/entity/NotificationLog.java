@@ -27,7 +27,7 @@ import lombok.Setter;
 
 /**
  * JPA Entity map với bảng {@code notification_logs} — nhật ký gửi thông báo
- * (Telegram/Email/WebSocket) để chống spam và audit. Không áp dụng soft delete.
+ * (WebSocket) để chống spam và audit. Không áp dụng soft delete.
  * Cấm xóa thủ công.
  */
 @Getter

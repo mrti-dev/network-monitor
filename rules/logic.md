@@ -48,7 +48,7 @@ graph TB
         POLL[Polling Engine<br/>ICMP / TCP / SNMP]
         EVAL[Health Evaluator<br/>State Machine]
         ALERT[Alert Engine<br/>Vòng đời TRIGGERED -> ACKNOWLEDGED -> RESOLVED]
-        NOTIFY[Notification Dispatcher<br/>Telegram / Email / WS]
+        NOTIFY[Notification Dispatcher<br/>WebSocket]
     end
 
     subgraph "Lưu Trữ"
@@ -85,7 +85,7 @@ graph TB
 | `DeviceLog`        | `device_logs`        | Nhật ký sự kiện, thay đổi trạng thái và hành động hệ thống.           |
 | `Alert`            | `alerts`             | Sự cố được kích hoạt; **cấm xóa**, chỉ chuyển trạng thái vòng đời.    |
 | `User`             | `users`              | Tài khoản người dùng, phân quyền bằng enum `Role`.                    |
-| `NotificationLog`  | `notification_logs`  | Nhật ký gửi thông báo (Telegram/Email/WebSocket), không xóa thủ công. |
+| `NotificationLog`  | `notification_logs`  | Nhật ký gửi thông báo (WebSocket), không xóa thủ công.                |
 
 > **Ghi chú:** Không còn bảng `roles`, `user_roles`, `role` entity. Phân quyền lưu trực tiếp enum `Role` trên cột `users.role` (`ADMIN`, `VIEWER`).
 
@@ -303,7 +303,7 @@ stateDiagram-v2
 | --------- | ----------------- | ---------------------------------- |
 | `id`      | `Long`            | `@Id` IDENTITY                     |
 | `alert`   | `Alert`           | `@ManyToOne(LAZY)` → `alert_id`    |
-| `channel` | `String(20)`      | `TELEGRAM` / `EMAIL` / `WEBSOCKET` |
+| `channel` | `String(20)`      | `WEBSOCKET`                        |
 | `message` | `String` (`@Lob`) | nội dung đã gửi                    |
 | `status`  | `String(20)`      | `SENT` / `FAILED`                  |
 | `sentAt`  | `LocalDateTime`   | not null                           |
@@ -394,11 +394,9 @@ Thuật toán chống flapping: chỉ chuyển trạng thái khi đủ N lần l
 
 ### 7.3 Kênh Thông Báo (Notification Dispatcher)
 
-| Kênh      | Severity | Log                                            |
-| --------- | -------- | ---------------------------------------------- |
-| Telegram  | Tất cả   | `notification_logs` (channel=`TELEGRAM`)       |
-| Email     | CRITICAL | `notification_logs` (channel=`EMAIL`)          |
-| WebSocket | Tất cả   | push `/topic/alerts`, `/topic/device-status/*` |
+| Kênh      | Severity | Log                                                                   |
+| --------- | -------- | --------------------------------------------------------------------- |
+| WebSocket | Tất cả   | push `/topic/alerts`, `/topic/device-status/*` + `notification_logs`  |
 
 ---
 
@@ -417,11 +415,11 @@ Thuật toán chống flapping: chỉ chuyển trạng thái khi đủ N lần l
 
 ### 8.2 Ma Trận Severity
 
-| Severity   | Điều kiện                                | Hành động                                 |
-| ---------- | ---------------------------------------- | ----------------------------------------- |
-| `INFO`     | Thêm thiết bị qua discovery, maintenance | Ghi `device_logs`, không notify           |
-| `WARNING`  | Latency > threshold, packet loss cao     | Alert `TRIGGERED` + Telegram + WS         |
-| `CRITICAL` | Device `OFFLINE`, port down              | Alert `TRIGGERED` + Telegram + Email + WS |
+| Severity   | Điều kiện                                | Hành động                 |
+| ---------- | ---------------------------------------- | ------------------------- |
+| `INFO`     | Thêm thiết bị qua discovery, maintenance | Ghi `device_logs`         |
+| `WARNING`  | Latency > threshold, packet loss cao     | Alert `TRIGGERED` + WS    |
+| `CRITICAL` | Device `OFFLINE`, port down              | Alert `TRIGGERED` + WS    |
 
 ---
 
@@ -467,7 +465,7 @@ com.network.network_monitor/
 ├── controller/      → (DeviceController, DiscoveryController, AlertController, ...)
 ├── scheduler/       → (PollingScheduler, HealthEvaluator, AlertEngine, MetricCleanupJob)
 ├── strategy/        → (ProbingStrategy, PingStrategy, TcpPortStrategy, SnmpStrategy)
-├── notification/    → (NotificationDispatcher, TelegramNotifier, EmailNotifier, WebSocketNotifier)
+├── notification/    → (NotificationDispatcher, WebSocketNotifier)
 └── exception/       → (GlobalExceptionHandler, BusinessException, ErrorCode, ...)
 ```
 

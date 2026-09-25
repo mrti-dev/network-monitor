@@ -198,13 +198,13 @@ jdbc:mysql://localhost:3306/network_monitor?useSSL=false&allowPublicKeyRetrieval
 | **Topics**   | `/topic/device-status/{id}`, `/topic/alerts`, `/topic/dashboard` |
 | **Mục đích** | Push real-time status change, alert events lên Dashboard.        |
 
-### 6.2 So Sánh Phương Thức Thông Báo
+### 6.2 Phương Thức Thông Báo
 
-| Kênh         | Severity      | Real-time | Lưu log             | Dependency cần thêm                     |
-| ------------ | ------------- | --------- | ------------------- | --------------------------------------- |
-| Telegram Bot | Mọi mức       | ~1s       | `notification_logs` | Không (REST call)                       |
-| Email        | CRITICAL only | ~5s       | `notification_logs` | `spring-boot-starter-mail`, `thymeleaf` |
-| WebSocket    | Mọi mức       | <100ms    | Không               | `spring-boot-starter-websocket`         |
+| Kênh      | Severity | Real-time | Lưu log             | Dependency cần thêm             |
+| --------- | -------- | --------- | ------------------- | ------------------------------- |
+| WebSocket | Mọi mức  | <100ms    | `notification_logs` | `spring-boot-starter-websocket` |
+
+> *Ghi chú:* Đã loại bỏ kênh thông báo Telegram Bot và Email/SMTP theo yêu cầu kiến trúc, chỉ duy trì thông báo thời gian thực qua WebSocket và ghi nhận nhật ký hệ thống.
 
 ---
 
@@ -317,13 +317,11 @@ Bảng tổng hợp các dependency **cần thêm vào `pom.xml`** trong các ph
 | 1   | `snmp4j`                        | `org.snmp4j`               | 3.8.x   | compile | Phase 2 | SNMP polling strategy           |
 | 2   | `spring-boot-starter-websocket` | `org.springframework.boot` | 3.5.16  | compile | Phase 2 | WebSocket/STOMP real-time       |
 | 3   | `spring-boot-starter-security`  | `org.springframework.boot` | 3.5.16  | compile | Phase 2 | Authentication + Authorization  |
-| 4   | `spring-boot-starter-mail`      | `org.springframework.boot` | 3.5.16  | compile | Phase 3 | Email notification              |
-| 5   | `thymeleaf-spring6`             | `org.thymeleaf`            | 3.1.x   | compile | Phase 3 | HTML email template             |
-| 6   | `jjwt-api`                      | `io.jsonwebtoken`          | 0.12.x  | compile | Phase 2 | JWT token generation/validation |
-| 7   | `jjwt-impl`                     | `io.jsonwebtoken`          | 0.12.x  | runtime | Phase 2 | JWT implementation              |
-| 8   | `jjwt-jackson`                  | `io.jsonwebtoken`          | 0.12.x  | runtime | Phase 2 | JWT JSON serialization          |
-| 9   | `flyway-core`                   | `org.flywaydb`             | 10.x    | compile | Phase 2 | Database migration              |
-| 10  | `flyway-mysql`                  | `org.flywaydb`             | 10.x    | compile | Phase 2 | Flyway MySQL dialect            |
+| 4   | `jjwt-api`                      | `io.jsonwebtoken`          | 0.12.x  | compile | Phase 2 | JWT token generation/validation |
+| 5   | `jjwt-impl`                     | `io.jsonwebtoken`          | 0.12.x  | runtime | Phase 2 | JWT implementation              |
+| 6   | `jjwt-jackson`                  | `io.jsonwebtoken`          | 0.12.x  | runtime | Phase 2 | JWT JSON serialization          |
+| 7   | `flyway-core`                   | `org.flywaydb`             | 10.x    | compile | Phase 2 | Database migration              |
+| 8   | `flyway-mysql`                  | `org.flywaydb`             | 10.x    | compile | Phase 2 | Flyway MySQL dialect            |
 
 ---
 

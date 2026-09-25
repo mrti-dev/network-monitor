@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<html lang="vi" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -26,6 +27,14 @@
                     <div class="nav-item">
                         <a href="/alerts" class="nav-link"><span class="nav-link-title">Cảnh báo</span></a>
                     </div>
+                    <div class="nav-item ms-3">
+                        <span class="nav-link text-muted" sec:authentication="name">username</span>
+                    </div>
+                    <div class="nav-item">
+                        <form th:action="@{/logout}" method="post" class="d-inline">
+                            <button type="submit" class="btn btn-sm btn-outline-secondary ms-2">Thoát</button>
+                        </form>
+                    </div>
                 </div>
             </div>
         </header>
@@ -40,10 +49,13 @@
                         </div>
                         <div class="col-auto ms-auto d-print-none">
                             <div class="btn-list">
-                                <a href="#" class="btn btn-success d-none d-sm-inline-block" data-bs-toggle="modal" data-bs-target="#scanModal">
+                                <a href="#" class="btn btn-success d-none d-sm-inline-block"
+                                   sec:authorize="hasAnyRole('ADMIN','OPERATOR')"
+                                   data-bs-toggle="modal" data-bs-target="#scanModal">
                                     <i class="bi bi-search me-2"></i> Quét mạng nội bộ
                                 </a>
-                                <a href="/devices/new" class="btn btn-primary d-none d-sm-inline-block">
+                                <a href="/devices/new" class="btn btn-primary d-none d-sm-inline-block"
+                                   sec:authorize="hasAnyRole('ADMIN','OPERATOR')">
                                     <i class="bi bi-plus-circle me-2"></i> Thêm thiết bị
                                 </a>
                             </div>
@@ -112,18 +124,30 @@
                                                 <a th:href="@{/devices/metrics/{id}(id=${device.id})}" class="btn btn-outline-info btn-icon" title="Biểu đồ giám sát">
                                                     <i class="bi bi-activity"></i>
                                                 </a>
-                                                <a th:href="@{/devices/edit/{id}(id=${device.id})}" class="btn btn-outline-primary btn-icon" title="Sửa">
+                                                <a th:href="@{/devices/edit/{id}(id=${device.id})}" class="btn btn-outline-primary btn-icon" title="Sửa"
+                                                   sec:authorize="hasAnyRole('ADMIN','OPERATOR')">
                                                     <i class="bi bi-pencil"></i>
                                                 </a>
-                                                <a th:href="@{/devices/toggle/{id}(id=${device.id})}"
-                                                   class="btn btn-icon" th:classappend="${device.isMonitored} ? 'btn-outline-warning' : 'btn-outline-success'"
-                                                   th:title="${device.isMonitored ? 'Tắt giám sát' : 'Bật giám sát'}">
-                                                    <i class="bi" th:classappend="${device.isMonitored} ? 'bi-pause-circle' : 'bi-play-circle'"></i>
-                                                </a>
-                                                <a th:href="@{/devices/delete/{id}(id=${device.id})}" class="btn btn-outline-danger btn-icon" title="Xóa"
-                                                   onclick="return confirm('Bạn có chắc chắn muốn xóa thiết bị này?');">
-                                                    <i class="bi bi-trash"></i>
-                                                </a>
+                                                <!-- Toggle: POST form -->
+                                                <form th:action="@{/devices/toggle/{id}(id=${device.id})}" method="post"
+                                                      class="d-inline"
+                                                      sec:authorize="hasAnyRole('ADMIN','OPERATOR')">
+                                                    <button type="submit"
+                                                            class="btn btn-icon"
+                                                            th:classappend="${device.isMonitored} ? 'btn-outline-warning' : 'btn-outline-success'"
+                                                            th:title="${device.isMonitored ? 'Tắt giám sát' : 'Bật giám sát'}">
+                                                        <i class="bi" th:classappend="${device.isMonitored} ? 'bi-pause-circle' : 'bi-play-circle'"></i>
+                                                    </button>
+                                                </form>
+                                                <!-- Delete: POST form, chỉ ADMIN -->
+                                                <form th:action="@{/devices/delete/{id}(id=${device.id})}" method="post"
+                                                      class="d-inline"
+                                                      sec:authorize="hasRole('ADMIN')"
+                                                      onsubmit="return confirm('Bạn có chắc chắn muốn xóa thiết bị này?');">
+                                                    <button type="submit" class="btn btn-outline-danger btn-icon" title="Xóa">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                </form>
                                             </div>
                                         </td>
                                     </tr>
@@ -187,6 +211,12 @@
     </div>
 
     <script>
+    function getCsrfToken() {
+        const match = document.cookie.split(';').map(c => c.trim())
+            .find(c => c.startsWith('XSRF-TOKEN='));
+        return match ? decodeURIComponent(match.split('=')[1]) : '';
+    }
+
     function startScan() {
         const loading = document.getElementById('scanLoading');
         const resultBox = document.getElementById('scanResult');
@@ -199,7 +229,8 @@
         fetch('/api/discovery/scan', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'X-XSRF-TOKEN': getCsrfToken()
             },
             body: JSON.stringify({ subnet: "" })
         })

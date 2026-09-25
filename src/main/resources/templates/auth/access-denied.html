@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <title>Truy cập bị từ chối – Network Monitor</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}"/>
+    <style>
+        body { display: flex; align-items: center; justify-content: center; min-height: 100vh; text-align: center; }
+        .card { background: var(--card-bg,#1e2130); border-radius:12px; padding:3rem; max-width:400px; }
+        h1 { font-size: 3rem; margin:0; }
+        p { opacity: .7; margin: 1rem 0 2rem; }
+        .btn { display:inline-block; padding:.6rem 1.5rem; background:#4f8ef7; color:#fff;
+               border-radius:6px; text-decoration:none; }
+    </style>
+</head>
+<body>
+<div class="card">
+    <h1>🔒</h1>
+    <h2>Truy cập bị từ chối</h2>
+    <p>Bạn không có quyền thực hiện thao tác này.</p>
+    <a id="btn-back-home" href="/devices" class="btn">Quay về trang chủ</a>
+</div>
+</body>
+</html>

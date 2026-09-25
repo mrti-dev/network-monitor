@@ -73,7 +73,7 @@ graph TB
         PROBE[Probing Strategies<br/>ICMP · TCP · SNMP]
         EVAL[Health Evaluator<br/>State Machine]
         ALERT[Alert Engine<br/>De-dup · Throttle]
-        NOTIFY[Notification Dispatcher<br/>Telegram · Email · WS]
+        NOTIFY[Notification Dispatcher<br/>WebSocket]
     end
 
     subgraph "Persistence Layer"
@@ -84,8 +84,6 @@ graph TB
     subgraph "Infrastructure"
         MYSQL[(MySQL 8.x)]
         CACHE[(In-Memory Cache<br/>Health Counters)]
-        TELEGRAM[Telegram Bot API]
-        SMTP[SMTP Server]
     end
 
     BROWSER --> REST
@@ -109,8 +107,6 @@ graph TB
 
     ALERT --> EVENTBUS
 
-    NOTIFY --> TELEGRAM
-    NOTIFY --> SMTP
     NOTIFY --> WS
 
     REPO --> ENTITY
@@ -166,7 +162,7 @@ com.network.network_monitor/
 ├── event/          → Domain events + listener/
 ├── strategy/       → Probing strategy interfaces & implementations
 ├── scheduler/      → PollingScheduler, HealthEvaluator, AlertEngine
-├── notification/   → Telegram, Email, WebSocket notifiers
+├── notification/   → NotificationDispatcher, WebSocket notifier
 ├── config/         → @Configuration classes (Async, Security, WebSocket)
 ├── exception/      → Custom exceptions + GlobalExceptionHandler
 └── util/           → Validators, NetworkUtils
@@ -381,7 +377,7 @@ public void onStatusChanged(DeviceStatusChangedEvent event) {
 | Hạng mục | Quy tắc |
 |---|---|
 | **Thăm dò** | Có thể tiếp tục probe (để hiển thị dữ liệu) HOẶC dừng probe tùy cấu hình. |
-| **Cảnh báo** | **VÔ HIỆU HÓA 100%** — không tạo `Alert`, không gửi Telegram/Email, không spam WebSocket. |
+| **Cảnh báo** | **VÔ HIỆU HÓA 100%** — không tạo `Alert`, không tạo thông báo hay spam WebSocket. |
 | **Hiển thị** | Dashboard hiển thị badge `🛠 Maintenance`. |
 | **Counter** | Reset failCounters khi vào/ra maintenance (tránh alert "sau" khi ra). |
 | **Trạng thái** | DeviceStatus là enum gộp — giá trị `MAINTENANCE` (asset-level) nằm cùng enum với `ONLINE/WARNING/OFFLINE/UNKNOWN` (health-level). Khi `DeviceStatus == MAINTENANCE`, không được chuyển sang `OFFLINE`. Soft delete (`is_deleted = true`) đóng vai trò tương đương `DECOMMISSIONED`. |
@@ -428,8 +424,6 @@ public void onStatusChanged(DeviceStatusChangedEvent event) {
 |---|---|---|---|
 | Spring WebSocket (STOMP) | 3.5.16 | Push real-time `/topic/device-status/{id}`, `/topic/alerts`. | ⬜ Cần thêm |
 | Spring `ApplicationEventPublisher` | 3.5.16 | Event Bus nội bộ giữa Worker ⇄ Web layer. | ✅ Có |
-| Telegram Bot API | REST | Thông báo qua HTTPS `api.telegram.org`. | ✅ Có (REST) |
-| JavaMailSender | 3.5.16 | Email CRITICAL. | ⬜ Cần thêm |
 
 ### 4.5 Dev & Testing Tools
 

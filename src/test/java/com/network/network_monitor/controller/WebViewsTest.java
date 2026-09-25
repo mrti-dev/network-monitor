@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -14,21 +15,28 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.*;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import com.network.network_monitor.config.AppUserDetailsService;
+import com.network.network_monitor.config.SecurityConfig;
 import com.network.network_monitor.dto.*;
 import com.network.network_monitor.exception.DuplicateResourceException;
 import com.network.network_monitor.service.*;
 
 @WebMvcTest({DeviceWebController.class, AlertWebController.class})
+@Import(SecurityConfig.class)
 class WebViewsTest {
     @Autowired MockMvc mvc;
     @MockitoBean DeviceService devices;
     @MockitoBean AlertService alerts;
+    @MockitoBean AppUserDetailsService appUserDetailsService;
 
     @ParameterizedTest
     @CsvSource({"-1,0,0,1", "0,101,0,100", "99,2,2,2"})
+    @WithMockUser(roles = "VIEWER")
     void paginationNormalizesBoundsAndKeepsSize(int page, int size, int expectedPage, int expectedSize) throws Exception {
         when(devices.getAllDevices(any())).thenAnswer(invocation -> {
             Pageable request = invocation.getArgument(0);
@@ -58,6 +66,7 @@ class WebViewsTest {
     }
 
     @Test
+    @WithMockUser(roles = "VIEWER")
     void emptyPageShowsZeroRangeAndResetsPage() throws Exception {
         when(devices.getAllDevices(any())).thenAnswer(i -> Page.empty(i.getArgument(0)));
         when(alerts.getAllAlerts(any())).thenAnswer(i -> Page.empty(i.getArgument(0)));
@@ -72,6 +81,7 @@ class WebViewsTest {
 
     @ParameterizedTest
     @CsvSource({"150", "321"})
+    @WithMockUser(roles = "VIEWER")
     void metricsRenderConfiguredOrDefaultThresholdAndReverseImmutableCopy(double threshold) throws Exception {
         when(devices.getDeviceFormById(1L)).thenReturn(DeviceFormDto.builder().id(1L).name("router").build());
         when(devices.getLatencyThreshold(1L)).thenReturn(threshold);
@@ -86,13 +96,14 @@ class WebViewsTest {
     }
 
     @Test
+    @WithMockUser(roles = "ADMIN")
     void unexpectedFailureNeverExposesSqlAndBusinessConflictIsShown() throws Exception {
         doThrow(new IllegalStateException("SQL secret constraint devices_ip")).when(devices).saveDevice(any());
-        mvc.perform(post("/devices/save").param("name", "router").param("ipAddress", "10.0.0.1"))
+        mvc.perform(post("/devices/save").with(csrf()).param("name", "router").param("ipAddress", "10.0.0.1"))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(flash().attribute("errorMessage", not(containsString("SQL"))));
         doThrow(new DuplicateResourceException("IP đã tồn tại.")).when(devices).saveDevice(any());
-        mvc.perform(post("/devices/save").param("name", "router").param("ipAddress", "10.0.0.1"))
+        mvc.perform(post("/devices/save").with(csrf()).param("name", "router").param("ipAddress", "10.0.0.1"))
                 .andExpect(status().isOk()).andExpect(content().string(containsString("IP đã tồn tại.")));
     }
 }

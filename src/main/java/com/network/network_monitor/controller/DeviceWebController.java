@@ -83,14 +83,14 @@ public class DeviceWebController {
         return "redirect:/devices";
     }
 
-    @GetMapping("/delete/{id}")
+    @PostMapping("/delete/{id}")
     public String deleteDevice(@PathVariable Long id, RedirectAttributes redirectAttributes) {
         deviceService.deleteDevice(id);
         redirectAttributes.addFlashAttribute("successMessage", "Đã xóa thiết bị thành công!");
         return "redirect:/devices";
     }
 
-    @GetMapping("/toggle/{id}")
+    @PostMapping("/toggle/{id}")
     public String toggleMonitoring(@PathVariable Long id, RedirectAttributes redirectAttributes) {
         deviceService.toggleMonitoring(id);
         redirectAttributes.addFlashAttribute("successMessage", "Cập nhật trạng thái giám sát thành công!");

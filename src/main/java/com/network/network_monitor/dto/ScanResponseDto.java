@@ -12,6 +12,9 @@ public class ScanResponseDto {
     private int reactivated;
     private int skipped;
     private int failed;
+    /** true nếu scan bị dừng sớm do timeout tổng — kết quả chỉ là một phần. */
+    @Builder.Default
+    private boolean partial = false;
     private List<DiscoveredDevice> details;
 
     @Data
@@ -24,3 +27,4 @@ public class ScanResponseDto {
         private DiscoveryOutcome outcome;
     }
 }
+

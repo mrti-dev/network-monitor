@@ -64,6 +64,7 @@ public class DeviceServiceImpl implements DeviceService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public DeviceFormDto getDeviceFormById(Long id) {
         Device device = deviceRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy thiết bị với ID: " + id));
@@ -86,21 +87,17 @@ public class DeviceServiceImpl implements DeviceService {
                     existingDevice.setDeviceType(formDto.getDeviceType());
                     existingDevice.setLocation(formDto.getLocation());
                     existingDevice.setIsMonitored(true);
-                    deviceRepository.saveAndFlush(existingDevice);
 
                     if (existingDevice.getMonitoringConfig() == null) {
-                        MonitoringConfig config = MonitoringConfig.builder()
+                        existingDevice.setMonitoringConfig(MonitoringConfig.builder()
                                 .device(existingDevice)
-                                .pingInterval(defaults.getPingInterval())
-                                .timeoutMs(defaults.getTimeoutMs())
-                                .latencyThreshold(defaults.getLatencyThreshold())
                                 .strategyType(ProbingMethod.ICMP)
-                                .build();
-                        existingDevice.setMonitoringConfig(config);
+                                .build());
                     }
+                    applyMonitoringConfig(existingDevice.getMonitoringConfig(), formDto);
 
                     healthEvaluator.resetCounters(existingDevice.getId());
-                    deviceRepository.save(existingDevice);
+                    deviceRepository.saveAndFlush(existingDevice);
 
                     DeviceLog logEntry = DeviceLog.builder()
                             .device(existingDevice)
@@ -128,11 +125,9 @@ public class DeviceServiceImpl implements DeviceService {
 
             MonitoringConfig config = MonitoringConfig.builder()
                     .device(device)
-                    .pingInterval(defaults.getPingInterval())
-                    .timeoutMs(defaults.getTimeoutMs())
-                    .latencyThreshold(defaults.getLatencyThreshold())
                     .strategyType(ProbingMethod.ICMP)
                     .build();
+            applyMonitoringConfig(config, formDto);
             device.setMonitoringConfig(config);
 
             deviceRepository.save(device);
@@ -152,6 +147,13 @@ public class DeviceServiceImpl implements DeviceService {
             device.setMacAddress(formDto.getMacAddress());
             device.setDeviceType(formDto.getDeviceType());
             device.setLocation(formDto.getLocation());
+            if (device.getMonitoringConfig() == null) {
+                device.setMonitoringConfig(MonitoringConfig.builder()
+                        .device(device)
+                        .strategyType(ProbingMethod.ICMP)
+                        .build());
+            }
+            applyMonitoringConfig(device.getMonitoringConfig(), formDto);
 
             deviceRepository.save(device);
         }
@@ -208,6 +210,19 @@ public class DeviceServiceImpl implements DeviceService {
                 .macAddress(device.getMacAddress())
                 .deviceType(device.getDeviceType())
                 .location(device.getLocation())
+                .pingInterval(configValue(device, MonitoringConfig::getPingInterval, defaults.getPingInterval()))
+                .timeoutMs(configValue(device, MonitoringConfig::getTimeoutMs, defaults.getTimeoutMs()))
+                .latencyThreshold(configValue(device, MonitoringConfig::getLatencyThreshold, defaults.getLatencyThreshold()))
                 .build();
+    }
+
+    private void applyMonitoringConfig(MonitoringConfig config, DeviceFormDto form) {
+        config.setPingInterval(form.getPingInterval() != null ? form.getPingInterval() : defaults.getPingInterval());
+        config.setTimeoutMs(form.getTimeoutMs() != null ? form.getTimeoutMs() : defaults.getTimeoutMs());
+        config.setLatencyThreshold(form.getLatencyThreshold() != null ? form.getLatencyThreshold() : defaults.getLatencyThreshold());
+    }
+
+    private <T> T configValue(Device device, java.util.function.Function<MonitoringConfig, T> getter, T fallback) {
+        return device.getMonitoringConfig() == null ? fallback : Optional.ofNullable(getter.apply(device.getMonitoringConfig())).orElse(fallback);
     }
 }

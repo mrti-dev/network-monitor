@@ -5,7 +5,5 @@ package com.network.network_monitor.enums;
  */
 public enum NotificationChannel {
 
-    TELEGRAM,
-    EMAIL,
     WEBSOCKET
 }

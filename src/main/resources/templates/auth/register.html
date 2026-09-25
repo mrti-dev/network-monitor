@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Đăng ký tài khoản – Network Monitor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com"/>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"/>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg-dark:      #0b0f1a;
+            --bg-card:      rgba(255, 255, 255, 0.04);
+            --border:       rgba(255, 255, 255, 0.08);
+            --border-hover: rgba(255, 255, 255, 0.16);
+            --cyan:         #06b6d4;
+            --blue:         #3b82f6;
+            --blue-glow:    rgba(59, 130, 246, 0.35);
+            --text-main:    #f0f4ff;
+            --text-muted:   rgba(240, 244, 255, 0.55);
+            --text-sub:     rgba(240, 244, 255, 0.38);
+            --input-bg:     rgba(255, 255, 255, 0.05);
+            --input-border: rgba(255, 255, 255, 0.1);
+            --input-focus:  rgba(59, 130, 246, 0.6);
+            --error:        #f87171;
+            --success:      #4ade80;
+            --warning:      #fbbf24;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-dark);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow-x: hidden;
+            color: var(--text-main);
+            padding: 2rem 1rem;
+        }
+
+        /* ── Animated network background ── */
+        #network-canvas {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            opacity: 0.45;
+            pointer-events: none;
+        }
+
+        /* ── Radial glow blobs ── */
+        .glow-blob {
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(130px);
+            pointer-events: none;
+            z-index: 0;
+        }
+        .glow-blob.blue  { width: 620px; height: 620px; background: rgba(59, 130, 246, 0.14); top: -140px; right: -120px; }
+        .glow-blob.cyan  { width: 540px; height: 540px; background: rgba(6, 182, 212, 0.11);  bottom: -90px; left: -110px; }
+
+        /* ── Main layout ── */
+        .page-wrapper {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 60px;
+            padding: 1.5rem;
+            width: 100%;
+            max-width: 1140px;
+        }
+
+        /* ── Left branding panel ── */
+        .brand-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 1.75rem;
+            animation: fadeSlideLeft 0.8s ease both;
+        }
+
+        .brand-logo {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .brand-logo .icon-wrap {
+            width: 56px;
+            height: 56px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, #1e40af, #0891b2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 24px rgba(59, 130, 246, 0.4);
+            font-size: 26px;
+            flex-shrink: 0;
+        }
+
+        .brand-logo .brand-text h1 {
+            font-size: 1.4rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        .brand-logo .brand-text span {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            font-weight: 400;
+        }
+
+        .brand-headline {
+            font-size: 2.5rem;
+            font-weight: 700;
+            line-height: 1.25;
+            letter-spacing: -0.03em;
+        }
+
+        .brand-headline .accent {
+            color: var(--cyan);
+            background: linear-gradient(135deg, #38bdf8 0%, #06b6d4 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .brand-desc {
+            font-size: 0.95rem;
+            color: var(--text-muted);
+            line-height: 1.7;
+            max-width: 440px;
+        }
+
+        .feature-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .feature-list li {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+
+        .feature-list li .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--cyan);
+            flex-shrink: 0;
+            box-shadow: 0 0 8px var(--cyan);
+        }
+
+        .security-badge {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 14px 18px;
+            backdrop-filter: blur(12px);
+            font-size: 0.84rem;
+            color: var(--text-muted);
+            line-height: 1.55;
+            max-width: 450px;
+        }
+
+        .security-badge i {
+            color: var(--cyan);
+            font-size: 1.2rem;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        /* ── Register Card ── */
+        .register-card {
+            width: 100%;
+            max-width: 480px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 40px 36px;
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            box-shadow:
+                0 0 0 1px rgba(255, 255, 255, 0.04) inset,
+                0 32px 80px rgba(0, 0, 0, 0.55);
+            animation: fadeSlideRight 0.8s ease both;
+        }
+
+        .card-header {
+            text-align: center;
+            margin-bottom: 28px;
+        }
+
+        .card-icon {
+            width: 68px;
+            height: 68px;
+            border-radius: 20px;
+            background: linear-gradient(135deg, #1e3a8a 0%, #0c4a6e 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 30px;
+            margin: 0 auto 16px;
+            box-shadow:
+                0 0 0 8px rgba(59, 130, 246, 0.08),
+                0 0 40px rgba(59, 130, 246, 0.3);
+            animation: icon-float 3.5s ease-in-out infinite;
+        }
+
+        .card-header h2 {
+            font-size: 1.55rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            margin-bottom: 6px;
+        }
+
+        .card-header p {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+        }
+
+        /* Alerts */
+        .alert {
+            border-radius: 12px;
+            padding: 12px 16px;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .alert-error {
+            background: rgba(248, 113, 113, 0.1);
+            border: 1px solid rgba(248, 113, 113, 0.28);
+            color: #fca5a5;
+        }
+
+        /* Form elements */
+        .form-group {
+            margin-bottom: 18px;
+        }
+
+        .form-group label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-bottom: 7px;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .form-hint {
+            font-size: 0.72rem;
+            text-transform: none;
+            color: var(--text-sub);
+            font-weight: 400;
+        }
+
+        .input-wrap {
+            position: relative;
+        }
+
+        .input-wrap .input-icon {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            font-size: 16px;
+            pointer-events: none;
+            transition: color 0.2s;
+        }
+
+        .input-wrap input {
+            width: 100%;
+            background: var(--input-bg);
+            border: 1px solid var(--input-border);
+            border-radius: 12px;
+            padding: 13px 44px;
+            font-family: inherit;
+            font-size: 0.92rem;
+            color: var(--text-main);
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+        }
+
+        .input-wrap input::placeholder {
+            color: var(--text-sub);
+        }
+
+        .input-wrap input:focus {
+            border-color: var(--blue);
+            background: rgba(59, 130, 246, 0.06);
+            box-shadow: 0 0 0 3px var(--blue-glow);
+        }
+
+        .input-wrap input:focus + .input-icon,
+        .input-wrap:focus-within .input-icon {
+            color: var(--blue);
+        }
+
+        .input-wrap.has-error input {
+            border-color: var(--error);
+            box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.2);
+        }
+
+        .field-error {
+            color: var(--error);
+            font-size: 0.78rem;
+            margin-top: 6px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* Toggle password button */
+        .toggle-pw {
+            position: absolute;
+            right: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 16px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            transition: color 0.2s;
+        }
+        .toggle-pw:hover { color: var(--text-main); }
+
+        /* ── Password strength meter ── */
+        .pw-strength-box {
+            margin-top: 8px;
+            display: none;
+        }
+
+        .pw-strength-bars {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 5px;
+            margin-bottom: 5px;
+        }
+
+        .pw-bar {
+            height: 4px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.1);
+            transition: background-color 0.25s ease;
+        }
+
+        .pw-strength-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.72rem;
+            color: var(--text-muted);
+        }
+
+        /* ── Password Match Feedback ── */
+        .pw-match-badge {
+            margin-top: 6px;
+            font-size: 0.75rem;
+            display: none;
+            align-items: center;
+            gap: 6px;
+        }
+        .pw-match-badge.matched {
+            display: flex;
+            color: var(--success);
+        }
+        .pw-match-badge.mismatched {
+            display: flex;
+            color: var(--error);
+        }
+
+        /* ── Role Selector Cards ── */
+        .role-cards-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-top: 4px;
+        }
+
+        .role-card-item {
+            position: relative;
+            cursor: pointer;
+        }
+
+        .role-card-item input[type="radio"] {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .role-card-inner {
+            background: var(--input-bg);
+            border: 1px solid var(--input-border);
+            border-radius: 12px;
+            padding: 12px;
+            transition: all 0.2s ease;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            height: 100%;
+        }
+
+        .role-card-inner:hover {
+            border-color: var(--border-hover);
+            background: rgba(255, 255, 255, 0.07);
+        }
+
+        .role-card-item input[type="radio"]:checked + .role-card-inner {
+            border-color: var(--cyan);
+            background: rgba(6, 182, 212, 0.1);
+            box-shadow: 0 0 16px rgba(6, 182, 212, 0.2);
+        }
+
+        .role-card-title {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        .role-card-title i {
+            color: var(--cyan);
+            font-size: 1rem;
+        }
+
+        .role-card-desc {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        /* ── Submit button ── */
+        .btn-register {
+            width: 100%;
+            padding: 14px;
+            margin-top: 14px;
+            border: none;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #2563eb 0%, #0891b2 100%);
+            color: #fff;
+            font-family: inherit;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.15s, box-shadow 0.2s;
+            box-shadow: 0 4px 24px rgba(37, 99, 235, 0.4);
+            letter-spacing: 0.02em;
+        }
+
+        .btn-register::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.18) 0%, transparent 60%);
+        }
+
+        .btn-register:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 32px rgba(37, 99, 235, 0.5);
+        }
+
+        .btn-register:active { transform: translateY(0); }
+
+        .btn-register.loading .btn-text { opacity: 0; }
+        .btn-register.loading .btn-spinner { display: flex; }
+
+        .btn-spinner {
+            display: none;
+            position: absolute;
+            inset: 0;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* ── Auth Switch ── */
+        .auth-switch {
+            text-align: center;
+            margin: 22px 0 0;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        .auth-switch a {
+            color: var(--cyan);
+            text-decoration: none;
+            font-weight: 600;
+            margin-left: 5px;
+            transition: color 0.15s, text-shadow 0.2s;
+        }
+
+        .auth-switch a:hover {
+            color: #38bdf8;
+            text-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+            text-decoration: underline;
+        }
+
+        /* Divider */
+        .divider {
+            text-align: center;
+            margin: 20px 0 0;
+            font-size: 0.76rem;
+            color: var(--text-sub);
+        }
+
+        /* ── Keyframes ── */
+        @keyframes fadeSlideLeft {
+            from { opacity: 0; transform: translateX(-30px); }
+            to   { opacity: 1; transform: translateX(0); }
+        }
+
+        @keyframes fadeSlideRight {
+            from { opacity: 0; transform: translateX(30px); }
+            to   { opacity: 1; transform: translateX(0); }
+        }
+
+        @keyframes icon-float {
+            0%, 100% { transform: translateY(0); }
+            50%       { transform: translateY(-6px); }
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .spinner {
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+        }
+
+        /* ── Responsive ── */
+        @media (max-width: 920px) {
+            .brand-panel { display: none; }
+            .page-wrapper { justify-content: center; }
+            .register-card { max-width: 440px; padding: 34px 28px; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Background canvas -->
+<canvas id="network-canvas"></canvas>
+
+<!-- Glow blobs -->
+<div class="glow-blob blue"></div>
+<div class="glow-blob cyan"></div>
+
+<div class="page-wrapper">
+
+    <!-- ── Left branding panel ── -->
+    <div class="brand-panel">
+        <div class="brand-logo">
+            <div class="icon-wrap">🖥️</div>
+            <div class="brand-text">
+                <h1>Network Monitor</h1>
+                <span>Hệ thống giám sát mạng</span>
+            </div>
+        </div>
+
+        <div>
+            <p class="brand-headline">
+                Khởi tạo tài khoản<br/>
+                Tham gia giám sát<br/>
+                <span class="accent">hệ thống thời gian thực</span>
+            </p>
+        </div>
+
+        <p class="brand-desc">
+            Bảo vệ hạ tầng mạng của tổ chức 24/7 với khả năng phát hiện thiết bị tự động,
+            đo lường độ trễ liên tục và đưa ra cảnh báo kịp thời.
+        </p>
+
+        <ul class="feature-list">
+            <li><span class="dot"></span>Quét dải mạng an toàn với ICMP/ARP Sweep</li>
+            <li><span class="dot"></span>Theo dõi độ trễ (latency) từng giây theo biểu đồ thời gian thực</li>
+            <li><span class="dot"></span>Cảnh báo tức thời qua nhiều kênh khi thiết bị ngoại tuyến</li>
+            <li><span class="dot"></span>Kiểm soát quyền truy cập chặt chẽ theo phân vai người dùng</li>
+        </ul>
+
+        <div class="security-badge">
+            <i class="bi bi-shield-check"></i>
+            <div>
+                <strong>Bảo mật chuẩn cấp công nghiệp:</strong> Mật khẩu người dùng được băm một chiều với BCrypt 10 rounds và bảo vệ CSRF trên mọi giao dịch.
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Register Card ── -->
+    <div class="register-card">
+        <div class="card-header">
+            <div class="card-icon">
+                <i class="bi bi-person-plus-fill" style="color:#fff;"></i>
+            </div>
+            <h2>Tạo tài khoản mới</h2>
+            <p>Điền thông tin bên dưới để bắt đầu sử dụng</p>
+        </div>
+
+        <!-- Global error alert -->
+        <div class="alert alert-error" th:if="${errorMessage}">
+            <i class="bi bi-exclamation-circle-fill"></i>
+            <span th:text="${errorMessage}">Đã xảy ra lỗi</span>
+        </div>
+
+        <!-- Form đăng ký -->
+        <form th:action="@{/register}" th:object="${registerForm}" method="post" id="register-form">
+
+            <!-- Họ và tên -->
+            <div class="form-group">
+                <label for="fullName">
+                    Họ và tên
+                    <span class="form-hint">Tối đa 100 ký tự</span>
+                </label>
+                <div class="input-wrap" th:classappend="${#fields.hasErrors('fullName')} ? 'has-error' : ''">
+                    <i class="bi bi-person-vcard input-icon"></i>
+                    <input
+                        id="fullName"
+                        type="text"
+                        th:field="*{fullName}"
+                        placeholder="Ví dụ: Nguyễn Văn An"
+                        autocomplete="name"
+                        required
+                        autofocus
+                    />
+                </div>
+                <div class="field-error" th:if="${#fields.hasErrors('fullName')}">
+                    <i class="bi bi-exclamation-circle"></i>
+                    <span th:errors="*{fullName}">Lỗi họ tên</span>
+                </div>
+            </div>
+
+            <!-- Tên đăng nhập -->
+            <div class="form-group">
+                <label for="username">
+                    Tên đăng nhập
+                    <span class="form-hint">3-30 ký tự, chữ & số</span>
+                </label>
+                <div class="input-wrap" th:classappend="${#fields.hasErrors('username')} ? 'has-error' : ''">
+                    <i class="bi bi-person input-icon"></i>
+                    <input
+                        id="username"
+                        type="text"
+                        th:field="*{username}"
+                        placeholder="Ví dụ: net_admin, operator1"
+                        autocomplete="username"
+                        required
+                    />
+                </div>
+                <div class="field-error" th:if="${#fields.hasErrors('username')}">
+                    <i class="bi bi-exclamation-circle"></i>
+                    <span th:errors="*{username}">Lỗi tên đăng nhập</span>
+                </div>
+            </div>
+
+            <!-- Mật khẩu -->
+            <div class="form-group">
+                <label for="password">
+                    Mật khẩu
+                    <span class="form-hint">Tối thiểu 6 ký tự</span>
+                </label>
+                <div class="input-wrap" th:classappend="${#fields.hasErrors('password')} ? 'has-error' : ''">
+                    <i class="bi bi-lock input-icon"></i>
+                    <input
+                        id="password"
+                        type="password"
+                        th:field="*{password}"
+                        placeholder="Nhập mật khẩu an toàn"
+                        autocomplete="new-password"
+                        required
+                        minlength="6"
+                        oninput="onPasswordInput(this.value)"
+                    />
+                    <button type="button" class="toggle-pw" onclick="togglePasswordVisibility('password', 'pw-eye-1')" aria-label="Hiện/ẩn mật khẩu">
+                        <i class="bi bi-eye" id="pw-eye-1"></i>
+                    </button>
+                </div>
+                <!-- Dynamic Password Strength Bar -->
+                <div class="pw-strength-box" id="pw-strength-box">
+                    <div class="pw-strength-bars">
+                        <div class="pw-bar" id="pw-bar-1"></div>
+                        <div class="pw-bar" id="pw-bar-2"></div>
+                        <div class="pw-bar" id="pw-bar-3"></div>
+                        <div class="pw-bar" id="pw-bar-4"></div>
+                    </div>
+                    <div class="pw-strength-label">
+                        <span>Độ mạnh mật khẩu:</span>
+                        <strong id="pw-strength-text">Yếu</strong>
+                    </div>
+                </div>
+                <div class="field-error" th:if="${#fields.hasErrors('password')}">
+                    <i class="bi bi-exclamation-circle"></i>
+                    <span th:errors="*{password}">Lỗi mật khẩu</span>
+                </div>
+            </div>
+
+            <!-- Xác nhận mật khẩu -->
+            <div class="form-group">
+                <label for="confirmPassword">
+                    Xác nhận mật khẩu
+                </label>
+                <div class="input-wrap" th:classappend="${#fields.hasErrors('confirmPassword')} ? 'has-error' : ''">
+                    <i class="bi bi-shield-lock input-icon"></i>
+                    <input
+                        id="confirmPassword"
+                        type="password"
+                        th:field="*{confirmPassword}"
+                        placeholder="Nhập lại mật khẩu vừa đặt"
+                        autocomplete="new-password"
+                        required
+                        oninput="onConfirmPasswordInput(this.value)"
+                    />
+                    <button type="button" class="toggle-pw" onclick="togglePasswordVisibility('confirmPassword', 'pw-eye-2')" aria-label="Hiện/ẩn xác nhận mật khẩu">
+                        <i class="bi bi-eye" id="pw-eye-2"></i>
+                    </button>
+                </div>
+                <!-- Password match indicator -->
+                <div class="pw-match-badge" id="pw-match-badge">
+                    <i class="bi" id="pw-match-icon"></i>
+                    <span id="pw-match-text"></span>
+                </div>
+                <div class="field-error" th:if="${#fields.hasErrors('confirmPassword')}">
+                    <i class="bi bi-exclamation-circle"></i>
+                    <span th:errors="*{confirmPassword}">Mật khẩu không khớp</span>
+                </div>
+            </div>
+
+            <!-- Phân vai trò -->
+            <div class="form-group">
+                <label>Vai trò mong muốn</label>
+                <div class="role-cards-container">
+                    <label class="role-card-item">
+                        <input type="radio" th:field="*{role}" value="VIEWER" checked/>
+                        <div class="role-card-inner">
+                            <div class="role-card-title">
+                                <i class="bi bi-eye-fill"></i>
+                                VIEWER
+                            </div>
+                            <div class="role-card-desc">Chỉ xem thiết bị, số liệu và nhận cảnh báo.</div>
+                        </div>
+                    </label>
+
+                    <label class="role-card-item">
+                        <input type="radio" th:field="*{role}" value="OPERATOR"/>
+                        <div class="role-card-inner">
+                            <div class="role-card-title">
+                                <i class="bi bi-gear-wide-connected"></i>
+                                OPERATOR
+                            </div>
+                            <div class="role-card-desc">Quét mạng, bật/tắt giám sát và quản lý thiết bị.</div>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <button type="submit" class="btn-register" id="btn-register">
+                <span class="btn-text">
+                    <i class="bi bi-person-check-fill" style="margin-right:8px;"></i>
+                    Đăng ký tài khoản
+                </span>
+                <span class="btn-spinner">
+                    <div class="spinner"></div>
+                </span>
+            </button>
+        </form>
+
+        <div class="auth-switch">
+            Đã có tài khoản?
+            <a th:href="@{/login}">Đăng nhập ngay</a>
+        </div>
+
+        <div class="divider">
+            Network Monitor &copy; 2026 &mdash; Phiên bản 1.0
+        </div>
+    </div>
+</div>
+
+<script>
+    // ── Toggle password visibility ──
+    function togglePasswordVisibility(inputId, iconId) {
+        const input = document.getElementById(inputId);
+        const icon  = document.getElementById(iconId);
+        const show  = input.type === 'password';
+        input.type  = show ? 'text' : 'password';
+        icon.className = show ? 'bi bi-eye-slash' : 'bi bi-eye';
+    }
+
+    // ── Dynamic Password Strength Indicator ──
+    function onPasswordInput(val) {
+        const strengthBox = document.getElementById('pw-strength-box');
+        const label = document.getElementById('pw-strength-text');
+        const b1 = document.getElementById('pw-bar-1');
+        const b2 = document.getElementById('pw-bar-2');
+        const b3 = document.getElementById('pw-bar-3');
+        const b4 = document.getElementById('pw-bar-4');
+
+        if (!val || val.length === 0) {
+            strengthBox.style.display = 'none';
+            return;
+        }
+
+        strengthBox.style.display = 'block';
+
+        let score = 0;
+        if (val.length >= 6) score++;
+        if (val.length >= 10) score++;
+        if (/[A-Z]/.test(val) && /[a-z]/.test(val)) score++;
+        if (/[0-9]/.test(val) && /[^A-Za-z0-9]/.test(val)) score++;
+
+        // Reset bars
+        [b1, b2, b3, b4].forEach(b => b.style.backgroundColor = 'rgba(255, 255, 255, 0.1)');
+
+        if (score <= 1) {
+            b1.style.backgroundColor = '#f87171'; // Red
+            label.textContent = 'Rất yếu';
+            label.style.color = '#f87171';
+        } else if (score === 2) {
+            b1.style.backgroundColor = '#fb923c';
+            b2.style.backgroundColor = '#fb923c'; // Orange
+            label.textContent = 'Yếu';
+            label.style.color = '#fb923c';
+        } else if (score === 3) {
+            b1.style.backgroundColor = '#fbbf24';
+            b2.style.backgroundColor = '#fbbf24';
+            b3.style.backgroundColor = '#fbbf24'; // Yellow
+            label.textContent = 'Khá';
+            label.style.color = '#fbbf24';
+        } else {
+            b1.style.backgroundColor = '#4ade80';
+            b2.style.backgroundColor = '#4ade80';
+            b3.style.backgroundColor = '#4ade80';
+            b4.style.backgroundColor = '#4ade80'; // Green
+            label.textContent = 'Rất mạnh';
+            label.style.color = '#4ade80';
+        }
+
+        // Recheck match
+        const confirmVal = document.getElementById('confirmPassword').value;
+        if (confirmVal) {
+            onConfirmPasswordInput(confirmVal);
+        }
+    }
+
+    // ── Dynamic Confirm Password Matching ──
+    function onConfirmPasswordInput(confirmVal) {
+        const pw = document.getElementById('password').value;
+        const badge = document.getElementById('pw-match-badge');
+        const icon = document.getElementById('pw-match-icon');
+        const text = document.getElementById('pw-match-text');
+
+        if (!confirmVal) {
+            badge.className = 'pw-match-badge';
+            return;
+        }
+
+        if (pw === confirmVal) {
+            badge.className = 'pw-match-badge matched';
+            icon.className = 'bi bi-check-circle-fill';
+            text.textContent = 'Mật khẩu xác nhận trùng khớp';
+        } else {
+            badge.className = 'pw-match-badge mismatched';
+            icon.className = 'bi bi-x-circle-fill';
+            text.textContent = 'Mật khẩu xác nhận chưa khớp';
+        }
+    }
+
+    // ── Loading state on submit ──
+    document.getElementById('register-form').addEventListener('submit', function(e) {
+        const btn = document.getElementById('btn-register');
+        btn.classList.add('loading');
+        btn.disabled = true;
+    });
+
+    // ── Animated network graph background ──
+    (function() {
+        const canvas = document.getElementById('network-canvas');
+        if (!canvas) return;
+        const ctx    = canvas.getContext('2d');
+
+        let W, H, nodes;
+
+        function resize() {
+            W = canvas.width  = window.innerWidth;
+            H = canvas.height = window.innerHeight;
+        }
+
+        function randomNode() {
+            return {
+                x:  Math.random() * W,
+                y:  Math.random() * H,
+                vx: (Math.random() - 0.5) * 0.4,
+                vy: (Math.random() - 0.5) * 0.4,
+                r:  Math.random() * 2 + 1.5,
+                color: Math.random() > 0.5 ? '#06b6d4' : '#3b82f6'
+            };
+        }
+
+        function init() {
+            resize();
+            const count = Math.min(Math.floor(W * H / 18000), 80);
+            nodes = Array.from({ length: count }, randomNode);
+        }
+
+        const LINK_DIST = 180;
+
+        function draw() {
+            ctx.clearRect(0, 0, W, H);
+
+            // Move nodes
+            for (const n of nodes) {
+                n.x += n.vx;
+                n.y += n.vy;
+                if (n.x < 0 || n.x > W) n.vx *= -1;
+                if (n.y < 0 || n.y > H) n.vy *= -1;
+            }
+
+            // Draw links
+            for (let i = 0; i < nodes.length; i++) {
+                for (let j = i + 1; j < nodes.length; j++) {
+                    const a = nodes[i], b = nodes[j];
+                    const dx = a.x - b.x, dy = a.y - b.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < LINK_DIST) {
+                        const alpha = (1 - dist / LINK_DIST) * 0.45;
+                        ctx.beginPath();
+                        ctx.strokeStyle = `rgba(59,130,246,${alpha})`;
+                        ctx.lineWidth   = 0.8;
+                        ctx.moveTo(a.x, a.y);
+                        ctx.lineTo(b.x, b.y);
+                        ctx.stroke();
+                    }
+                }
+            }
+
+            // Draw nodes
+            for (const n of nodes) {
+                ctx.beginPath();
+                ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+                ctx.fillStyle = n.color;
+                ctx.shadowBlur = 8;
+                ctx.shadowColor = n.color;
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            }
+
+            requestAnimationFrame(draw);
+        }
+
+        window.addEventListener('resize', init);
+        init();
+        draw();
+    })();
+</script>
+
+</body>
+</html>

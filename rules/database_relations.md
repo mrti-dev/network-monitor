@@ -181,7 +181,7 @@ alerts  N ─── 0..1 users               (ManyToOne acknowledged_by, LAZY)
 |---|---|---|---|---|
 | `id` | `BIGINT` | NO | AUTO_INCREMENT | `@Id` IDENTITY |
 | `alert_id` | `BIGINT` | NO | — | FK → `alerts.id` |
-| `channel` | `VARCHAR(20)` | NO | — | `TELEGRAM`/`EMAIL`/`WEBSOCKET` |
+| `channel` | `VARCHAR(20)` | NO | — | `WEBSOCKET` |
 | `message` | `LONGTEXT` | YES | — | `@Lob` |
 | `status` | `VARCHAR(20)` | NO | — | `SENT`/`FAILED` |
 | `sent_at` | `DATETIME` | NO | — | `@PrePersist` |
