@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<body>
+<aside class="sidebar" th:fragment="sidebar(active)">
+  <a class="brand" th:href="@{/devices}"><span class="brand-mark">N//</span><span><strong>NDMMS</strong><small>GIÁM SÁT MẠNG</small></span></a>
+  <div class="environment"><i class="dot"></i>PRODUCTION <span>HN-01</span></div>
+  <p class="nav-label">ĐIỀU HƯỚNG HỆ THỐNG</p>
+  <nav class="nav">
+    <a th:href="@{/devices}" th:classappend="${active == 'overview'} ? 'active'"><span class="nav-icon">01</span>Tổng quan</a>
+    <a th:href="@{/discovery}" th:classappend="${active == 'discovery'} ? 'active'"><span class="nav-icon">02</span>Auto-Discovery</a>
+    <a th:href="@{/inventory}" th:classappend="${active == 'devices'} ? 'active'"><span class="nav-icon">03</span>Thiết bị</a>
+    <a th:href="@{/monitoring}" th:classappend="${active == 'monitoring'} ? 'active'"><span class="nav-icon">04</span>Cấu hình giám sát</a>
+    <a th:href="@{/alerts}" th:classappend="${active == 'alerts'} ? 'active'"><span class="nav-icon">05</span>Cảnh báo</a>
+    <a th:href="@{/notifications}" th:classappend="${active == 'notifications'} ? 'active'"><span class="nav-icon">06</span>Kênh thông báo</a>
+  </nav>
+  <div class="sidebar-bottom">
+    <div class="health-box">SỨC KHỎE HỆ THỐNG <strong>99.98%</strong><p>Hoạt động bình thường</p></div>
+    <div class="profile">
+      <span class="avatar">NA</span>
+      <span class="profile-details"><strong sec:authentication="name">Nguyễn An</strong><small sec:authorize="hasRole('ADMIN')">ADMIN</small><small sec:authorize="hasRole('OPERATOR')">OPERATOR</small><small sec:authorize="hasRole('VIEWER')">VIEWER</small></span>
+      <form class="logout-form" th:action="@{/logout}" method="post"><button type="submit" class="logout-btn" title="Đăng xuất" aria-label="Đăng xuất">⇥</button></form>
+    </div>
+  </div>
+</aside>
+<header class="page-top" th:fragment="top(eyebrow,title)">
+  <div><p class="eyebrow" th:text="${eyebrow}">OPERATIONS / LIVE</p><h1 class="page-title" th:text="${title}">Tổng quan hệ thống</h1></div>
+  <div class="live-tools"><span class="live-chip">LIVE · 2s</span><span class="select-chip">24 giờ qua</span><button class="refresh-btn" type="button" data-refresh aria-label="Làm mới">↻</button></div>
+</header>
+<footer class="page-footer" th:fragment="footer"><span>Phân quyền: ADMIN toàn quyền · VIEWER chỉ xem</span><span>Mọi thao tác được ghi vào nhật ký hệ thống</span></footer>
+</body></html>

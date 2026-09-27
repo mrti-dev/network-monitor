@@ -37,6 +37,7 @@ class AuthControllerTest {
     void getRegisterPage_returnsRegisterViewWithEmptyForm() throws Exception {
         mvc.perform(get("/register"))
                 .andExpect(status().isOk())
+                .andExpect(cookie().exists("XSRF-TOKEN"))
                 .andExpect(view().name("auth/register"))
                 .andExpect(model().attributeExists("registerForm"));
     }

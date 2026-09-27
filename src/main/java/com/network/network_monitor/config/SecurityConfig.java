@@ -63,6 +63,8 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         // CSRF: bật cho form web và Fetch (CookieCsrfTokenRepository JS-friendly)
         CsrfTokenRequestAttributeHandler csrfHandler = new CsrfTokenRequestAttributeHandler();
+        // Force the deferred token to load so a fresh browser receives XSRF-TOKEN on GET.
+        csrfHandler.setCsrfRequestAttributeName(null);
         http
             .csrf(csrf -> csrf
                 .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())

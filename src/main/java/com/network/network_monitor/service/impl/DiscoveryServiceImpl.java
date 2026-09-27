@@ -9,7 +9,10 @@ import java.net.NetworkInterface;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -301,7 +304,7 @@ public class DiscoveryServiceImpl implements DiscoveryService {
 	 * </ol>
 	 */
 	private String detectLocalSubnet() {
-		List<String> candidates = new ArrayList<>();
+		Set<String> candidates = new LinkedHashSet<>();
 		try {
 			Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
 			while (interfaces != null && interfaces.hasMoreElements()) {
@@ -309,10 +312,7 @@ public class DiscoveryServiceImpl implements DiscoveryService {
 				if (ni.isLoopback() || !ni.isUp())
 					continue;
 
-				String name = ni.getName().toLowerCase();
-				// Bỏ interface ảo phổ biến
-				if (name.startsWith("vir") || name.startsWith("vmnet") || name.startsWith("docker")
-						|| name.startsWith("veth") || name.startsWith("br-"))
+				if (ni.isVirtual() || isVirtualInterfaceName(ni.getName(), ni.getDisplayName()))
 					continue;
 
 				for (java.net.InterfaceAddress ia : ni.getInterfaceAddresses()) {
@@ -344,12 +344,31 @@ public class DiscoveryServiceImpl implements DiscoveryService {
 					"Không tìm thấy interface mạng phù hợp. Vui lòng truyền subnet vào yêu cầu.");
 		}
 		if (candidates.size() == 1) {
-			log.info("Auto-detected subnet: {}", candidates.get(0));
-			return candidates.get(0);
+			String subnet = candidates.iterator().next();
+			log.info("Auto-detected subnet: {}", subnet);
+			return subnet;
 		}
 		// Nhiều candidate → yêu cầu client chọn
 		throw new InvalidCidrException("SUBNET_AMBIGUOUS",
 				"Phát hiện nhiều interface hợp lệ: " + candidates + ". Vui lòng truyền subnet cụ thể vào yêu cầu.");
+	}
+
+	static boolean isVirtualInterfaceName(String name, String displayName) {
+		String identity = ((name == null ? "" : name) + " "
+				+ (displayName == null ? "" : displayName)).toLowerCase(Locale.ROOT);
+		return identity.contains("virtual")
+				|| identity.contains("vmware")
+				|| identity.contains("vmnet")
+				|| identity.contains("hyper-v")
+				|| identity.contains("vethernet")
+				|| identity.contains("docker")
+				|| identity.contains("veth")
+				|| identity.contains("host-only")
+				|| identity.contains("wsl")
+				|| identity.contains("vpn")
+				|| identity.contains("tunnel")
+				|| identity.contains("tap-")
+				|| identity.contains("tun");
 	}
 
 	private int bytesToInt(byte[] b) {
