@@ -1,274 +1,43 @@
 <!DOCTYPE html>
-<html lang="vi" xmlns:th="http://www.thymeleaf.org"
-      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Danh sách thiết bị</title>
-    <!-- Tabler Core -->
-    <link rel="stylesheet" th:href="@{/dist/css/tabler.min.css}">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
-    <script th:src="@{/dist/js/tabler.min.js}" defer></script>
-</head>
-<body class="layout-fluid">
-    <div class="page">
-        <!-- Navbar -->
-        <header class="navbar navbar-expand-md d-print-none" data-bs-theme="dark">
-            <div class="container-xl">
-                <h1 class="navbar-brand navbar-brand-autodark d-none-navbar-horizontal pe-0 pe-md-3">
-                    <a href="/devices" class="text-decoration-none">
-                        <i class="bi bi-hdd-network"></i> Hệ thống Quản lý và Giám sát Thiết bị Mạng
-                    </a>
-                </h1>
-                <div class="navbar-nav flex-row order-md-last">
-                    <div class="nav-item active">
-                        <a href="/devices" class="nav-link"><span class="nav-link-title">Thiết bị</span></a>
-                    </div>
-                    <div class="nav-item">
-                        <a href="/alerts" class="nav-link"><span class="nav-link-title">Cảnh báo</span></a>
-                    </div>
-                    <div class="nav-item ms-3">
-                        <span class="nav-link text-muted" sec:authentication="name">username</span>
-                    </div>
-                    <div class="nav-item">
-                        <form th:action="@{/logout}" method="post" class="d-inline">
-                            <button type="submit" class="btn btn-sm btn-outline-secondary ms-2">Thoát</button>
-                        </form>
-                    </div>
-                </div>
-            </div>
-        </header>
-
-        <div class="page-wrapper">
-            <!-- Page header -->
-            <div class="page-header d-print-none">
-                <div class="container-xl">
-                    <div class="row g-2 align-items-center">
-                        <div class="col">
-                            <h2 class="page-title text-primary"><i class="bi bi-list-ul me-2"></i> Danh sách thiết bị</h2>
-                        </div>
-                        <div class="col-auto ms-auto d-print-none">
-                            <div class="btn-list">
-                                <a href="#" class="btn btn-success d-none d-sm-inline-block"
-                                   sec:authorize="hasAnyRole('ADMIN','OPERATOR')"
-                                   data-bs-toggle="modal" data-bs-target="#scanModal">
-                                    <i class="bi bi-search me-2"></i> Quét mạng nội bộ
-                                </a>
-                                <a href="/devices/new" class="btn btn-primary d-none d-sm-inline-block"
-                                   sec:authorize="hasAnyRole('ADMIN','OPERATOR')">
-                                    <i class="bi bi-plus-circle me-2"></i> Thêm thiết bị
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Page body -->
-            <div class="page-body">
-                <div class="container-xl">
-
-                    <div th:if="${successMessage}" class="alert alert-success alert-dismissible" role="alert">
-                        <div class="d-flex">
-                            <div><i class="bi bi-check-circle me-2"></i></div>
-                            <div th:text="${successMessage}"></div>
-                        </div>
-                        <a class="btn-close" data-bs-dismiss="alert" aria-label="close"></a>
-                    </div>
-
-                    <div th:if="${errorMessage}" class="alert alert-danger alert-dismissible" role="alert">
-                        <div class="d-flex">
-                            <div><i class="bi bi-exclamation-triangle me-2"></i></div>
-                            <div th:text="${errorMessage}"></div>
-                        </div>
-                        <a class="btn-close" data-bs-dismiss="alert" aria-label="close"></a>
-                    </div>
-
-                    <div class="card">
-                        <div class="table-responsive">
-                            <table class="table table-vcenter card-table table-striped">
-                                <thead>
-                                    <tr>
-                                        <th>ID</th>
-                                        <th>Tên</th>
-                                        <th>IP</th>
-                                        <th>MAC</th>
-                                        <th>Loại</th>
-                                        <th>Trạng thái</th>
-                                        <th>Vị trí</th>
-                                        <th>Giám sát</th>
-                                        <th class="w-1 text-center">Thao tác</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr th:each="device : ${devicePage.content}">
-                                        <td class="text-secondary" th:text="${device.id}"></td>
-                                        <td class="fw-bold" th:text="${device.name}"></td>
-                                        <td th:text="${device.ipAddress}"></td>
-                                        <td class="text-secondary" th:text="${device.macAddress}"></td>
-                                        <td class="text-secondary" th:text="${device.deviceType}"></td>
-                                        <td>
-                                            <span class="badge bg-green-lt" th:if="${device.status?.name() == 'ONLINE'}">ONLINE</span>
-                                            <span class="badge bg-red-lt" th:if="${device.status?.name() == 'OFFLINE'}">OFFLINE</span>
-                                            <span class="badge bg-yellow-lt" th:if="${device.status?.name() == 'WARNING'}">WARNING</span>
-                                            <span class="badge bg-secondary-lt" th:if="${device.status?.name() == 'UNKNOWN'}">UNKNOWN</span>
-                                            <span class="badge bg-blue-lt" th:if="${device.status?.name() == 'MAINTENANCE'}">MAINTENANCE</span>
-                                        </td>
-                                        <td class="text-secondary" th:text="${device.location}"></td>
-                                        <td>
-                                            <span class="badge bg-green-lt" th:if="${device.isMonitored}"><i class="bi bi-check-circle me-1"></i> Bật</span>
-                                            <span class="badge bg-secondary-lt" th:unless="${device.isMonitored}"><i class="bi bi-x-circle me-1"></i> Tắt</span>
-                                        </td>
-                                        <td>
-                                            <div class="btn-list flex-nowrap justify-content-center">
-                                                <a th:href="@{/devices/metrics/{id}(id=${device.id})}" class="btn btn-outline-info btn-icon" title="Biểu đồ giám sát">
-                                                    <i class="bi bi-activity"></i>
-                                                </a>
-                                                <a th:href="@{/devices/edit/{id}(id=${device.id})}" class="btn btn-outline-primary btn-icon" title="Sửa"
-                                                   sec:authorize="hasAnyRole('ADMIN','OPERATOR')">
-                                                    <i class="bi bi-pencil"></i>
-                                                </a>
-                                                <!-- Toggle: POST form -->
-                                                <form th:action="@{/devices/toggle/{id}(id=${device.id})}" method="post"
-                                                      class="d-inline"
-                                                      sec:authorize="hasAnyRole('ADMIN','OPERATOR')">
-                                                    <button type="submit"
-                                                            class="btn btn-icon"
-                                                            th:classappend="${device.isMonitored} ? 'btn-outline-warning' : 'btn-outline-success'"
-                                                            th:title="${device.isMonitored ? 'Tắt giám sát' : 'Bật giám sát'}">
-                                                        <i class="bi" th:classappend="${device.isMonitored} ? 'bi-pause-circle' : 'bi-play-circle'"></i>
-                                                    </button>
-                                                </form>
-                                                <!-- Delete: POST form, chỉ ADMIN -->
-                                                <form th:action="@{/devices/delete/{id}(id=${device.id})}" method="post"
-                                                      class="d-inline"
-                                                      sec:authorize="hasRole('ADMIN')"
-                                                      onsubmit="return confirm('Bạn có chắc chắn muốn xóa thiết bị này?');">
-                                                    <button type="submit" class="btn btn-outline-danger btn-icon" title="Xóa">
-                                                        <i class="bi bi-trash"></i>
-                                                    </button>
-                                                </form>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                    <tr th:if="${#lists.isEmpty(devicePage.content)}">
-                                        <td colspan="9" class="text-center py-4 text-secondary">Không có thiết bị nào.</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                        <div class="card-footer d-flex align-items-center">
-                            <p class="m-0 text-secondary">
-                                Hiển thị <span th:text="${devicePage.totalElements == 0 ? 0 : devicePage.number * devicePage.size + 1}"></span>
-                                đến <span th:text="${(devicePage.number * devicePage.size) + devicePage.numberOfElements}"></span>
-                                của <span th:text="${devicePage.totalElements}"></span> mục
-                            </p>
-                            <ul class="pagination m-0 ms-auto" th:if="${devicePage.totalPages > 1}">
-                                <li class="page-item" th:classappend="${devicePage.first} ? 'disabled'">
-                                    <a class="page-link" th:href="${devicePage.first} ? '#' : @{/devices(page=${devicePage.number - 1}, size=${devicePage.size})}" tabindex="-1">Trước</a>
-                                </li>
-                                <li class="page-item" th:each="i : ${#numbers.sequence(
-                                    (devicePage.number - 2 < 0 ? 0 : devicePage.number - 2),
-                                    (devicePage.number + 2 >= devicePage.totalPages ? devicePage.totalPages - 1 : devicePage.number + 2))}"
-                                    th:classappend="${devicePage.number == i} ? 'active'" th:if="${devicePage.totalPages > 0}">
-                                    <a class="page-link" th:href="@{/devices(page=${i}, size=${devicePage.size})}" th:text="${i + 1}"></a>
-                                </li>
-                                <li class="page-item" th:classappend="${devicePage.last} ? 'disabled'">
-                                    <a class="page-link" th:href="${devicePage.last} ? '#' : @{/devices(page=${devicePage.number + 1}, size=${devicePage.size})}">Sau</a>
-                                </li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal Quét Mạng -->
-    <div class="modal modal-blur fade" id="scanModal" tabindex="-1" role="dialog" aria-hidden="true">
-      <div class="modal-dialog modal-dialog-centered" role="document">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title"><i class="bi bi-radar me-2"></i> Quét thiết bị trong mạng LAN</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-          </div>
-          <div class="modal-body">
-            <div class="mb-3">
-              <p class="text-secondary">Hệ thống sẽ tự động phát hiện dải mạng LAN (Subnet) mà máy chủ đang kết nối và tiến hành quét (Ping/ARP Sweep) để tìm các thiết bị đang online.</p>
-            </div>
-            <div id="scanResult" class="alert d-none"></div>
-            <div class="text-center d-none" id="scanLoading">
-                <div class="spinner-border text-primary" role="status"></div>
-                <div class="mt-2 text-secondary">Hệ thống đang dò tìm mạng và quét đa luồng. Vui lòng đợi trong giây lát...</div>
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-link link-secondary me-auto" data-bs-dismiss="modal">Đóng</button>
-            <button type="button" class="btn btn-success" id="startScanBtn" onclick="startScan()">Bắt đầu quét tự động</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <script>
-    function getCsrfToken() {
-        const match = document.cookie.split(';').map(c => c.trim())
-            .find(c => c.startsWith('XSRF-TOKEN='));
-        return match ? decodeURIComponent(match.split('=')[1]) : '';
-    }
-
-    function startScan() {
-        const loading = document.getElementById('scanLoading');
-        const resultBox = document.getElementById('scanResult');
-        const scanBtn = document.getElementById('startScanBtn');
-
-        loading.classList.remove('d-none');
-        resultBox.classList.add('d-none');
-        scanBtn.disabled = true;
-
-        fetch('/api/discovery/scan', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-XSRF-TOKEN': getCsrfToken()
-            },
-            body: JSON.stringify({ subnet: "" })
-        })
-        .then(async response => {
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.message || `HTTP Status ${response.status}`);
-            return data;
-        })
-        .then(data => {
-            loading.classList.add('d-none');
-            scanBtn.disabled = false;
-
-            if (data.success) {
-                resultBox.classList.remove('d-none', 'alert-danger');
-                resultBox.classList.add('alert-success');
-                resultBox.innerHTML = `Quét thành công! Tìm thấy <strong>${data.data.discovered}</strong> thiết bị. <br>Đã thêm mới: <strong>${data.data.added}</strong> <br>Khôi phục: <strong>${data.data.reactivated}</strong> <br>Thất bại: <strong>${data.data.failed}</strong> <br>Bỏ qua: <strong>${data.data.skipped}</strong> <br><small class="text-secondary">Đang tải lại trang...</small>`;
-
-                setTimeout(() => {
-                    window.location.reload();
-                }, 3000);
-            } else {
-                resultBox.classList.remove('d-none', 'alert-success');
-                resultBox.classList.add('alert-danger');
-                let errorMsg = 'Lỗi không xác định';
-                if (data.errors && Array.isArray(data.errors)) {
-                    errorMsg = data.errors.join(", ");
-                }
-                resultBox.innerHTML = 'Lỗi: ' + errorMsg;
-            }
-        })
-        .catch(error => {
-            loading.classList.add('d-none');
-            scanBtn.disabled = false;
-            resultBox.classList.remove('d-none', 'alert-success');
-            resultBox.classList.add('alert-danger');
-            resultBox.innerHTML = 'Lỗi kết nối tới API: ' + error.message;
-        });
-    }
-    </script>
-</body>
-</html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security6">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NDMMS · Tổng quan</title><link rel="stylesheet" th:href="@{/css/ndmms.css}"><script th:src="@{/js/ndmms.js}" defer></script></head>
+<body><div class="app-shell">
+  <aside th:replace="~{fragments/shell :: sidebar('overview')}"></aside>
+  <main class="workspace">
+    <header th:replace="~{fragments/shell :: top('OPERATIONS / LIVE','Tổng quan hệ thống')}"></header>
+    <div class="flash" th:if="${successMessage}" th:text="${successMessage}"></div><div class="flash error" th:if="${errorMessage}" th:text="${errorMessage}"></div>
+    <section class="grid kpi-grid" th:with="issueCount=${#lists.size(devicePage.content.?[status != null and (status.name() == 'OFFLINE' or status.name() == 'WARNING')])}">
+      <article class="panel kpi"><span class="label">Tổng thiết bị</span><strong th:text="${devicePage.totalElements}">0</strong><small>Danh mục đang quản lý</small></article>
+      <article class="panel kpi"><span class="label">Đang online</span><strong th:text="${#lists.size(devicePage.content.?[status != null and status.name() == 'ONLINE'])}">0</strong><small>Hoạt động ổn định</small></article>
+      <article class="panel kpi" th:classappend="${issueCount > 0} ? 'danger'"><span class="label">Cảnh báo mở</span><strong th:text="${issueCount}">0</strong><small th:text="${issueCount > 0 ? 'Cần kiểm tra' : 'Không có cảnh báo'}">Không có cảnh báo</small></article>
+      <article class="panel kpi"><span class="label">Chu kỳ giám sát</span><strong>15s</strong><small>ICMP / Ping</small></article>
+    </section>
+    <section class="grid dashboard-grid">
+      <article class="panel"><div class="panel-title"><h2>Auto-Discovery</h2><small>PING / ARP SWEEP</small></div><p class="muted">Tự nhận diện mạng cục bộ và bổ sung thiết bị mới vào hệ thống.</p><div class="toolbar"><input id="quickSubnet" class="form-control mono" placeholder="Tự động nhận dải mạng"><button id="quickScan" class="btn btn-primary">Bắt đầu quét</button></div><p id="quickScanStatus" class="muted" style="margin-bottom:0">Sẵn sàng quét mạng.</p></article>
+      <article class="panel"><div class="panel-title"><h2>Sức khỏe mạng</h2><small>REAL-TIME · 60 GIÂY</small></div><div class="chart"><svg viewBox="0 0 600 160" preserveAspectRatio="none"><polyline points="0,125 75,122 150,118 225,85 300,108 375,70 450,99 525,62 600,78"/><polyline class="loss" points="0,130 75,130 150,126 225,112 300,120 375,105 450,117 525,93 600,108"/></svg></div></article>
+    </section>
+    <section class="grid dashboard-lower">
+      <article class="panel"><div class="panel-title"><h2>Thiết bị gần đây</h2><a class="btn btn-outline" th:href="@{/inventory}">Xem toàn bộ</a></div><div class="table-wrap"><table class="data-table"><thead><tr><th>IP / MAC</th><th>Loại thiết bị</th><th>Trạng thái</th><th>Giám sát</th><th>Thao tác</th></tr></thead><tbody>
+        <tr th:each="device : ${devicePage.content}"><td class="device-name"><strong th:text="${device.ipAddress}"></strong><small th:text="${device.macAddress ?: 'Chưa nhận diện MAC'}"></small></td><td th:text="${device.deviceType}"></td><td><span class="badge" th:classappend="${device.status}" th:text="${device.status}"></span></td><td th:text="${device.isMonitored ? 'Có' : 'Không'}"></td><td><a class="btn" th:href="@{/devices/metrics/{id}(id=${device.id})}">Chi tiết</a></td></tr>
+        <tr th:if="${#lists.isEmpty(devicePage.content)}"><td colspan="5"><div class="empty">Chưa có thiết bị. Hãy bắt đầu quét mạng.</div></td></tr>
+      </tbody></table></div>
+      <div class="pagination-bar">
+        <span>Hiển thị <span th:text="${devicePage.totalElements == 0 ? 0 : devicePage.number * devicePage.size + 1}">0</span>
+          đến <span th:text="${devicePage.totalElements == 0 ? 0 : devicePage.number * devicePage.size + devicePage.numberOfElements}">0</span>
+          của <span th:text="${devicePage.totalElements}">0</span> mục</span>
+        <nav class="pagination" th:if="${devicePage.totalPages > 1}">
+          <a class="btn" th:if="${devicePage.hasPrevious()}" th:href="@{/devices(page=${devicePage.number - 1},size=${devicePage.size})}">Trước</a>
+          <span th:text="${devicePage.number + 1} + ' / ' + ${devicePage.totalPages}"></span>
+          <a class="btn" th:if="${devicePage.hasNext()}" th:href="@{/devices(page=${devicePage.number + 1},size=${devicePage.size})}">Sau</a>
+        </nav>
+      </div></article>
+      <article class="panel"><div class="panel-title"><h2>Cảnh báo ưu tiên</h2><a th:href="@{/alerts}">Xem tất cả</a></div><div class="alert-list"><div class="alert-card critical" th:each="device : ${devicePage.content}" th:if="${device.status != null and device.status.name() == 'OFFLINE'}"><header><span class="badge CRITICAL">CRITICAL</span><small>TRIGGERED</small></header><p th:text="${device.name + ' mất kết nối'}">Thiết bị mất kết nối</p><small th:text="${device.ipAddress}">IP thiết bị</small></div><div class="alert-card" th:each="device : ${devicePage.content}" th:if="${device.status != null and device.status.name() == 'WARNING'}"><header><span class="badge WARNING">WARNING</span><small>MONITORING</small></header><p th:text="${device.name + ' cần kiểm tra'}">Thiết bị cần kiểm tra</p><small th:text="${device.ipAddress}">IP thiết bị</small></div><div class="empty compact" th:if="${#lists.isEmpty(devicePage.content.?[status != null and (status.name() == 'OFFLINE' or status.name() == 'WARNING')])}">Không có cảnh báo đang mở.</div></div></article>
+    </section>
+    <section class="grid config-row"><article class="panel"><div class="panel-title"><h2>Cấu hình giám sát theo thiết bị</h2><small>ICMP / TCP / SNMP</small></div><div class="stat-strip"><div class="mini-stat"><span>Chu kỳ ping</span><strong>15 giây</strong></div><div class="mini-stat"><span>Timeout</span><strong>500 ms</strong></div><div class="mini-stat"><span>Ngưỡng độ trễ</span><strong>150 ms</strong></div><div class="mini-stat"><span>Phương thức</span><strong>ICMP</strong></div></div></article><article class="panel"><div class="panel-title"><h2>Kênh thông báo</h2><a th:href="@{/notifications}">Cấu hình</a></div><p>Telegram <span class="badge UNKNOWN" style="float:right">CHƯA CẤU HÌNH</span></p><p>Email <span class="badge UNKNOWN" style="float:right">CHƯA CẤU HÌNH</span></p></article></section>
+    <footer th:replace="~{fragments/shell :: footer}"></footer>
+  </main>
+</div>
+<script>
+const csrfCookie=()=>decodeURIComponent((document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]*)/)||[])[1]||"");
+document.getElementById('quickScan').addEventListener('click',async()=>{const b=document.getElementById('quickScan'),s=document.getElementById('quickScanStatus');b.disabled=true;s.textContent='Đang quét mạng cục bộ...';try{const subnet=document.getElementById('quickSubnet').value.trim();const r=await fetch('/api/discovery/scan',{method:'POST',headers:{'Content-Type':'application/json','X-XSRF-TOKEN':csrfCookie()},body:JSON.stringify(subnet?{subnet}:{})});const j=await r.json();if(!r.ok)throw new Error(j.message||j.error||'Không thể quét mạng');s.textContent=`Hoàn tất: ${j.data.discovered} phát hiện · ${j.data.added} thiết bị mới`;setTimeout(()=>location.reload(),900)}catch(e){s.textContent=e.message}finally{b.disabled=false}});
+</script></body></html>
