@@ -3,6 +3,7 @@ package com.network.network_monitor.service.impl;
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.net.DatagramSocket;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
@@ -303,16 +304,15 @@ public class DiscoveryServiceImpl implements DiscoveryService {
 	private String detectLocalSubnet() {
 		List<String> candidates = new ArrayList<>();
 		try {
+			InetAddress primaryAddress = detectPrimaryAddress();
 			Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
 			while (interfaces != null && interfaces.hasMoreElements()) {
 				NetworkInterface ni = interfaces.nextElement();
-				if (ni.isLoopback() || !ni.isUp())
+				if (ni.isLoopback() || !ni.isUp() || ni.isVirtual())
 					continue;
 
-				String name = ni.getName().toLowerCase();
-				// Bỏ interface ảo phổ biến
-				if (name.startsWith("vir") || name.startsWith("vmnet") || name.startsWith("docker")
-						|| name.startsWith("veth") || name.startsWith("br-"))
+				String identity = (ni.getName() + " " + ni.getDisplayName()).toLowerCase();
+				if (identity.matches(".*(vmware|vmnet|virtual|hyper-v|docker|veth|loopback|vpn|tap|tun).*"))
 					continue;
 
 				for (java.net.InterfaceAddress ia : ni.getInterfaceAddresses()) {
@@ -332,7 +332,12 @@ public class DiscoveryServiceImpl implements DiscoveryService {
 					int ipInt = bytesToInt(raw);
 					int mask = (prefix == 32) ? 0xFFFFFFFF : (0xFFFFFFFF << (32 - prefix));
 					int netInt = ipInt & mask;
-					candidates.add(CidrValidator.intToIpv4(netInt) + "/" + prefix);
+					String subnet = CidrValidator.intToIpv4(netInt) + "/" + prefix;
+					if (addr.equals(primaryAddress)) {
+						log.info("Auto-detected primary subnet: {}", subnet);
+						return subnet;
+					}
+					candidates.add(subnet);
 				}
 			}
 		} catch (Exception e) {
@@ -350,6 +355,16 @@ public class DiscoveryServiceImpl implements DiscoveryService {
 		// Nhiều candidate → yêu cầu client chọn
 		throw new InvalidCidrException("SUBNET_AMBIGUOUS",
 				"Phát hiện nhiều interface hợp lệ: " + candidates + ". Vui lòng truyền subnet cụ thể vào yêu cầu.");
+	}
+
+	private InetAddress detectPrimaryAddress() {
+		try (DatagramSocket socket = new DatagramSocket()) {
+			socket.connect(InetAddress.getByName("8.8.8.8"), 53);
+			return socket.getLocalAddress();
+		} catch (Exception e) {
+			log.debug("Không xác định được interface mặc định: {}", e.getMessage());
+			return null;
+		}
 	}
 
 	private int bytesToInt(byte[] b) {

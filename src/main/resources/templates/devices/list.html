@@ -234,11 +234,10 @@
             },
             body: JSON.stringify({ subnet: "" })
         })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error("HTTP Status " + response.status);
-            }
-            return response.json();
+        .then(async response => {
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.message || `HTTP Status ${response.status}`);
+            return data;
         })
         .then(data => {
             loading.classList.add('d-none');
