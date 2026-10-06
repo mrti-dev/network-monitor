@@ -55,7 +55,7 @@ public class NotificationLog {
     private NotificationChannel channel;
 
     @Lob
-    @Column(name = "message")
+    @Column(name = "message", columnDefinition = "TEXT")
     private String message;
 
     @Column(name = "status", nullable = false, length = 20)

@@ -56,6 +56,7 @@ class MySqlPersistenceTest {
         }
         registry.add("spring.datasource.url", () -> url);
         registry.add("spring.datasource.driver-class-name", () -> "com.mysql.cj.jdbc.Driver");
+        registry.add("spring.jpa.database-platform", () -> "org.hibernate.dialect.MySQLDialect");
         registry.add("spring.datasource.username", () -> System.getenv("MYSQL_TEST_USER"));
         registry.add("spring.datasource.password", () -> System.getenv("MYSQL_TEST_PASSWORD"));
     }
@@ -64,6 +65,7 @@ class MySqlPersistenceTest {
     @Autowired DeviceLogRepository logs;
     @Autowired MetricLogRepository metrics;
     @Autowired AlertRepository alerts;
+    @Autowired TcpPortMonitorRepository portRepository;
     @Autowired DeviceServiceImpl service;
     @Autowired DiscoveryTransactionService discovery;
     @Autowired AlertServiceImpl alertService;
@@ -72,6 +74,7 @@ class MySqlPersistenceTest {
     @Autowired EntityManager entityManager;
     @Autowired JdbcTemplate jdbc;
     @MockitoBean HealthEvaluator health;
+    @MockitoBean org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate;
     @MockitoSpyBean NotificationLogRepository notifications;
 
     private Device device() {
@@ -118,6 +121,22 @@ class MySqlPersistenceTest {
         assertThat(discovery.processDiscoveredDevice(ScanResponseDto.DiscoveredDevice.builder()
                 .ipAddress(device.getIpAddress()).build(), "test")).isEqualTo(DiscoveryOutcome.REACTIVATED);
         assertThat(jdbc.queryForObject("select count(*) from monitoring_configs where device_id=?", Integer.class, device.getId())).isEqualTo(1);
+    }
+
+    @Test
+    void discoveryPersistsDetectedTypeAndBackfillsOnlyMissingType() {
+        String newIp = "198.51.100.10";
+        assertThat(discovery.processDiscoveredDevice(ScanResponseDto.DiscoveredDevice.builder()
+                .ipAddress(newIp).macAddress("A8:42:A1:00:00:01").deviceType(DeviceType.ROUTER).build(), "test"))
+                .isEqualTo(DiscoveryOutcome.ADDED);
+        assertThat(devices.findByIpAddress(newIp).orElseThrow().getDeviceType()).isEqualTo(DeviceType.ROUTER);
+
+        Device missingType = device();
+        assertThat(discovery.processDiscoveredDevice(ScanResponseDto.DiscoveredDevice.builder()
+                .ipAddress(missingType.getIpAddress()).deviceType(DeviceType.ACCESS_POINT).build(), "test"))
+                .isEqualTo(DiscoveryOutcome.SKIPPED);
+        assertThat(devices.findById(missingType.getId()).orElseThrow().getDeviceType())
+                .isEqualTo(DeviceType.ACCESS_POINT);
     }
 
     @Test
@@ -207,7 +226,8 @@ class MySqlPersistenceTest {
             assertThat(jdbc.queryForObject("select count(*) from notification_logs n join alerts a on n.alert_id=a.id where a.device_id=?", Integer.class, device.getId())).isZero();
         });
         assertThat(jdbc.queryForList("select n.status from notification_logs n join alerts a on n.alert_id=a.id where a.device_id=?", String.class, device.getId()))
-                .containsExactly("NOT_IMPLEMENTED");
+                .containsExactly("SENT");
+        assertThat(jdbc.queryForObject("select count(*) from notification_logs n join alerts a on n.alert_id=a.id where a.device_id=?", Integer.class, device.getId())).isEqualTo(1);
         Device rollback = device();
         new TransactionTemplate(manager).executeWithoutResult(status -> {
             alertService.triggerAlert(rollback, "rollback", AlertType.OFFLINE);
@@ -295,5 +315,39 @@ class MySqlPersistenceTest {
             assertThat(devices.findById(device.getId()).orElseThrow().getName()).isEqualTo(winner);
         }
         assertThat(logs.findByDeviceIdAndAction(device.getId(), DeviceLogAction.REACTIVATE)).hasSize(1);
+    }
+
+    @Test
+    void tcpPortMonitorMappingAndUniqueConstraint() {
+        Device device = device();
+        TcpPortMonitor p1 = TcpPortMonitor.builder()
+                .device(device)
+                .port(80)
+                .serviceName("HTTP")
+                .timeoutMs(3000)
+                .failureThreshold(3)
+                .successThreshold(2)
+                .status(TcpPortStatus.UNKNOWN)
+                .enabled(true)
+                .build();
+        portRepository.saveAndFlush(p1);
+
+        assertThat(p1.getId()).isNotNull();
+        assertThat(p1.getCreatedAt()).isNotNull();
+
+        // Kiểm tra duplicate port trên cùng device gây DataIntegrityViolationException
+        TcpPortMonitor p2 = TcpPortMonitor.builder()
+                .device(device)
+                .port(80)
+                .serviceName("HTTP Duplicate")
+                .timeoutMs(2000)
+                .failureThreshold(3)
+                .successThreshold(2)
+                .status(TcpPortStatus.UNKNOWN)
+                .enabled(true)
+                .build();
+
+        assertThatThrownBy(() -> portRepository.saveAndFlush(p2))
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 }

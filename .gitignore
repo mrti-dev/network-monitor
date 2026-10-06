@@ -38,6 +38,8 @@ opencode.json
 
 docs
 
+AGENTS.md
+
 ### Secrets — NEVER commit ###
 .env
 .env.local

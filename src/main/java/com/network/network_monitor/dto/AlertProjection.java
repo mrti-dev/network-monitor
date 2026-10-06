@@ -11,6 +11,8 @@ public interface AlertProjection {
     String getMessage();
     String getSeverity();
     String getStatus();
+    String getAcknowledgedBy();
+    LocalDateTime getAcknowledgedAt();
     LocalDateTime getTriggeredAt();
     LocalDateTime getResolvedAt();
 }

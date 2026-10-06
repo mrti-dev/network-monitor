@@ -414,6 +414,7 @@ public void onStatusChanged(DeviceStatusChangedEvent event) {
 | Công nghệ | Phiên bản | Mục đích | Trạng thái |
 |---|---|---|---|
 | MySQL Server | **8.0+** | Database chính thức (InnoDB, utf8mb4). | ✅ Có |
+| Flyway (flyway-mysql) | **11.x** | Database version control & migration (`V1__init_schema.sql`, `ddl-auto=validate`). | ✅ Có |
 | HikariCP | 6.3.3 | Connection pool (mặc định Spring Boot). | ✅ Có |
 | Virtual Threads | Java 25 | `Executors.newVirtualThreadPerTaskExecutor()` — polling SSE. | ✅ Có |
 | H2 Database | 2.3.232 | In-memory DB cho integration test. | ✅ Có (test) |
@@ -452,7 +453,7 @@ public void onStatusChanged(DeviceStatusChangedEvent event) {
 | MongoDB | 🚫 | Time-series metric có thể cân nhắc sau, hiện tại MySQL + rollup đủ. |
 | Redis | 🟡 Tùy chọn | Cache dashboard aggregation (TTL) nếu cần scale. |
 | Kafka/RabbitMQ | 🟡 Tùy chọn | Event bus ngoài tiến trình — chỉ khi multi-instance cần. Mặc định dùng Spring Event nội bộ. |
-| Thymeleaf (server-side rendering) | 🟡 Email template only | KHÔNG dùng cho trang web — dùng API JSON + SPA. |
+| Thymeleaf (server-side rendering) | 🟢 Web Views | Server-side rendering cho Web Dashboard UI. |
 
 ---
 

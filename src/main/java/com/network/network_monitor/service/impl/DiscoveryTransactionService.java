@@ -26,7 +26,6 @@ public class DiscoveryTransactionService {
     private final DeviceRepository deviceRepository;
     private final DeviceLogRepository deviceLogRepository;
     private final HealthEvaluator healthEvaluator;
-    private final MonitoringDefaults defaults;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public DiscoveryOutcome processDiscoveredDevice(DiscoveredDevice dev, String targetSubnet) {
@@ -37,6 +36,10 @@ public class DiscoveryTransactionService {
         }
         Device existing = existingOpt.get();
         if (!existing.getIsDeleted()) {
+            if (existing.getDeviceType() == null && dev.getDeviceType() != null) {
+                existing.setDeviceType(dev.getDeviceType());
+                deviceRepository.save(existing);
+            }
             return DiscoveryOutcome.SKIPPED;
         }
         existing.setIsDeleted(false);
@@ -44,14 +47,14 @@ public class DiscoveryTransactionService {
         if (dev.getMacAddress() != null && !dev.getMacAddress().isEmpty()) {
             existing.setMacAddress(dev.getMacAddress());
         }
+        if (dev.getDeviceType() != null) {
+            existing.setDeviceType(dev.getDeviceType());
+        }
         existing.setIsMonitored(true);
         deviceRepository.saveAndFlush(existing);
         if (existing.getMonitoringConfig() == null) {
             existing.setMonitoringConfig(MonitoringConfig.builder()
                     .device(existing)
-                    .pingInterval(defaults.getPingInterval())
-                    .timeoutMs(defaults.getTimeoutMs())
-                    .latencyThreshold(defaults.getLatencyThreshold())
                     .strategyType(ProbingMethod.ICMP)
                     .build());
         }
@@ -70,6 +73,7 @@ public class DiscoveryTransactionService {
                 .name("Auto-Discovered: " + dev.getIpAddress())
                 .ipAddress(dev.getIpAddress())
                 .macAddress(dev.getMacAddress())
+                .deviceType(dev.getDeviceType())
                 .status(DeviceStatus.UNKNOWN)
                 .isMonitored(true)
                 .isDeleted(false)
@@ -77,9 +81,6 @@ public class DiscoveryTransactionService {
 
         MonitoringConfig config = MonitoringConfig.builder()
                 .device(device)
-                .pingInterval(defaults.getPingInterval())
-                .timeoutMs(defaults.getTimeoutMs())
-                .latencyThreshold(defaults.getLatencyThreshold())
                 .strategyType(ProbingMethod.ICMP)
                 .build();
         device.setMonitoringConfig(config);

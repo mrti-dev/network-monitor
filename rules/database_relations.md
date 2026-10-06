@@ -287,9 +287,9 @@ erDiagram
 
 ---
 
-## 11. DDL Tổng Hợp (MySQL 8.x)
+## 11. DDL Tổng Hợp (MySQL 8.x — Flyway Migration V1)
 
-> `ddl-auto=update` hiện tại tự tạo schema. DDL dưới đây dùng làm tài liệu tham chiếu cho Flyway/migration sau này.
+> Hệ thống sử dụng Flyway migration (`src/main/resources/db/migration/V1__init_schema.sql`) và `ddl-auto=validate` trong production.
 
 ```sql
 CREATE DATABASE IF NOT EXISTS network_monitor

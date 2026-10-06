@@ -1,3 +1,115 @@
-<!DOCTYPE html><html lang="vi" xmlns:th="http://www.thymeleaf.org"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NDMMS · Thông báo</title><link rel="stylesheet" th:href="@{/css/ndmms.css}"><script th:src="@{/js/ndmms.js}" defer></script></head><body><div class="app-shell"><aside th:replace="~{fragments/shell :: sidebar('notifications')}"></aside><main class="workspace"><header th:replace="~{fragments/shell :: top('CẤU HÌNH THÔNG BÁO / NOTIFICATION CHANNELS','Quản lý kênh & cấu hình nhận cảnh báo')}"></header>
-<section class="grid channel-grid"><article class="panel channel"><div class="panel-title"><h2>Telegram</h2><span class="status">Chưa cấu hình</span></div><p>Gửi cảnh báo tức thì vào nhóm vận hành hạ tầng.</p><button class="btn btn-outline btn-block" disabled>Cấu hình trong application.properties</button></article><article class="panel channel"><div class="panel-title"><h2>Email / SMTP</h2><span class="status muted">Chưa hỗ trợ</span></div><p>Hệ thống báo cáo sự cố qua thư điện tử định kỳ.</p><button class="btn btn-block" disabled>Đang phát triển</button></article><article class="panel channel"><div class="panel-title"><h2>Webhook</h2><span class="status muted">Chưa hỗ trợ</span></div><p>Đẩy JSON payload sang hệ thống ITSM ngoài.</p><button class="btn btn-block" disabled>Đang phát triển</button></article><article class="panel channel"><div class="panel-title"><h2>SMS Brandname</h2><span class="status WARNING">Chưa hỗ trợ</span></div><p>Dịch vụ tin nhắn khẩn cấp cho lãnh đạo.</p><button class="btn btn-block" disabled>Đang phát triển</button></article></section>
-<section class="grid config-row" style="margin-top:18px"><article class="panel"><div class="panel-title"><h2>Liên kết kênh theo mức độ cảnh báo</h2></div><table class="data-table"><thead><tr><th>Mức độ sự cố</th><th>Telegram</th><th>Email</th><th>Webhook</th><th>SMS</th></tr></thead><tbody><tr><td class="CRITICAL">Nghiêm trọng</td><td class="muted">Theo cấu hình</td><td class="muted">Tắt</td><td class="muted">Tắt</td><td class="muted">Tắt</td></tr><tr><td class="WARNING">Cảnh báo</td><td class="muted">Theo cấu hình</td><td class="muted">Tắt</td><td class="muted">Tắt</td><td class="muted">Tắt</td></tr><tr><td class="INFO">Thông tin</td><td class="muted">Tắt</td><td class="muted">Tắt</td><td class="muted">Tắt</td><td class="muted">Tắt</td></tr></tbody></table></article><article class="panel"><div class="panel-title"><h2>Leo thang cảnh báo</h2></div><div class="stack"><div class="choice"><strong>Cấp độ 1: Telegram</strong><small class="muted">Tức thì khi phát hiện</small></div><div class="choice"><strong>Cấp độ 2: Email trưởng nhóm</strong><small class="muted">Chưa có backend</small></div><div class="choice"><strong>Cấp độ 3: SMS giám đốc</strong><small class="muted">Chưa có backend</small></div></div></article></section><footer th:replace="~{fragments/shell :: footer}"></footer></main></div></body></html>
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>NDMMS · Thông báo</title>
+  <link rel="stylesheet" th:href="@{/css/ndmms.css}">
+  <script th:src="@{/js/ndmms.js}" defer></script>
+  <script th:src="@{/js/websocket-client.js}" defer></script>
+</head>
+<body>
+<div class="app-shell">
+  <aside th:replace="~{fragments/shell :: sidebar('notifications')}"></aside>
+  <main class="workspace">
+    <header th:replace="~{fragments/shell :: top('HỆ THỐNG / NOTIFICATIONS','Trung tâm thông báo')}"></header>
+
+    <section class="grid" style="grid-template-columns:1fr 1fr;margin-bottom:18px">
+      <article class="panel">
+        <div class="panel-title">
+          <h2>WebSocket / STOMP Broker</h2>
+          <span id="wsStatusBadge" class="badge ONLINE">ĐANG KẾT NỐI</span>
+        </div>
+        <p class="muted">Kênh phân phối thông báo sự cố và cập nhật trạng thái thiết bị thời gian thực tới trình duyệt.</p>
+        <div class="stat-strip" style="grid-template-columns:repeat(2,1fr)">
+          <div class="mini-stat"><span>Endpoint</span><strong class="mono">/ws</strong></div>
+          <div class="mini-stat"><span>Protocol</span><strong>STOMP</strong></div>
+        </div>
+      </article>
+
+      <article class="panel">
+        <div class="panel-title">
+          <h2>Các Topic phân phối sự kiện</h2>
+          <small>REAL-TIME SUBSCRIPTIONS</small>
+        </div>
+        <div class="stack">
+          <div class="choice">
+            <strong class="mono">/topic/alerts</strong>
+            <small class="muted" style="display:block">Phát sự cố mới (TRIGGERED), xác nhận (ACKNOWLEDGED), giải quyết (RESOLVED)</small>
+          </div>
+          <div class="choice">
+            <strong class="mono">/topic/devices</strong>
+            <small class="muted" style="display:block">Phát thay đổi trạng thái thiết bị (ONLINE, WARNING, OFFLINE, MAINTENANCE)</small>
+          </div>
+          <div class="choice">
+            <strong class="mono">/topic/dashboard</strong>
+            <small class="muted" style="display:block">Cập nhật số liệu thống kê tổng hợp của hệ thống</small>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section class="panel">
+      <div class="panel-title">
+        <h2>Nhật ký gửi thông báo (Audit Log)</h2>
+        <span class="muted" th:text="${#lists.size(logs) + ' bản ghi gần nhất'}">0 bản ghi</span>
+      </div>
+
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Mã sự cố</th>
+              <th>Kênh</th>
+              <th>Nội dung thông báo</th>
+              <th>Trạng thái gửi</th>
+              <th>Thời gian phát</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr th:each="logItem : ${logs}">
+              <td class="mono" th:text="${'#' + logItem.id}">#1</td>
+              <td class="mono">
+                <a th:if="${logItem.alert != null}" th:href="@{/alerts}" th:text="${'Alert #' + logItem.alert.id}">Alert #1</a>
+                <span th:if="${logItem.alert == null}">-</span>
+              </td>
+              <td><span class="badge ONLINE" th:text="${logItem.channel}">WEBSOCKET</span></td>
+              <td th:text="${logItem.message}">Nội dung thông báo</td>
+              <td>
+                <span class="badge" th:classappend="${logItem.status == 'SENT' ? 'ONLINE' : 'OFFLINE'}" th:text="${logItem.status}">SENT</span>
+              </td>
+              <td class="mono muted" th:text="${#temporals.format(logItem.sentAt, 'dd/MM/yyyy HH:mm:ss')}">Thời gian</td>
+            </tr>
+            <tr th:if="${#lists.isEmpty(logs)}">
+              <td colspan="6"><div class="empty">Chưa có bản ghi thông báo nào trong nhật ký.</div></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer th:replace="~{fragments/shell :: footer}"></footer>
+  </main>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const badge = document.getElementById('wsStatusBadge');
+  if (window.ndmmsWs && badge) {
+    window.ndmmsWs.onStatusChange((status) => {
+      if (status === 'connected') {
+        badge.className = 'badge ONLINE';
+        badge.textContent = 'HOẠT ĐỘNG';
+      } else if (status === 'reconnecting') {
+        badge.className = 'badge WARNING';
+        badge.textContent = 'ĐANG KẾT NỐI LẠI';
+      } else {
+        badge.className = 'badge OFFLINE';
+        badge.textContent = 'MẤT KẾT NỐI';
+      }
+    });
+  }
+});
+</script>
+</body>
+</html>

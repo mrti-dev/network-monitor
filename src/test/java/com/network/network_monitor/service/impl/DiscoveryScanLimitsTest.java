@@ -2,6 +2,7 @@ package com.network.network_monitor.service.impl;
 
 import com.network.network_monitor.config.DiscoveryLimits;
 import com.network.network_monitor.config.MonitoringDefaults;
+import com.network.network_monitor.discovery.MacOuiDeviceTypeResolver;
 import com.network.network_monitor.dto.ScanRequestDto;
 import com.network.network_monitor.exception.InvalidCidrException;
 import com.network.network_monitor.exception.ScanTooLargeException;
@@ -31,7 +32,7 @@ class DiscoveryScanLimitsTest {
         limits.setScanTimeoutSeconds(5);
         limits.setProbeTimeoutMs(200);
         limits.setArpTimeoutMs(200);
-        service = new DiscoveryServiceImpl(txService, defaults, limits);
+        service = new DiscoveryServiceImpl(txService, defaults, limits, new MacOuiDeviceTypeResolver());
     }
 
     // ------------------------------------------------------------------

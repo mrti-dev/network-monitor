@@ -73,22 +73,33 @@ public class SecurityConfig {
             .authenticationProvider(authenticationProvider())
             .authorizeHttpRequests(auth -> auth
                 // Static resources
-                .requestMatchers("/css/**", "/js/**", "/images/**", "/favicon.ico").permitAll()
+                .requestMatchers("/css/**", "/js/**", "/images/**", "/dist/**", "/favicon.ico").permitAll()
                 // Login & Register pages
                 .requestMatchers("/login", "/login/**", "/register", "/register/**").permitAll()
+                // WebSocket endpoint
+                .requestMatchers("/ws", "/ws/**").authenticated()
                 // Đọc — tất cả vai trò đã đăng nhập
                 .requestMatchers(HttpMethod.GET,
-                        "/", "/devices", "/devices/metrics/**",
-                        "/alerts", "/alerts/**").hasAnyRole("ADMIN", "OPERATOR", "VIEWER")
+                        "/", "/devices", "/devices/metrics/**", "/devices/*/ports/**", "/api/devices/*/ports/**",
+                        "/api/devices/*/metrics**", "/devices/*/maintenance/**", "/api/devices/*/maintenance/**", "/api/maintenance/**",
+                        "/alerts", "/alerts/**",
+                        "/inventory", "/discovery", "/monitoring", "/notifications").hasAnyRole("ADMIN", "OPERATOR", "VIEWER")
                 // Form create/edit — ADMIN và OPERATOR
                 .requestMatchers(HttpMethod.GET,
                         "/devices/new", "/devices/edit/**").hasAnyRole("ADMIN", "OPERATOR")
-                // Lưu thiết bị — ADMIN và OPERATOR
+                // Lưu thiết bị & toggle & maintenance — ADMIN và OPERATOR
                 .requestMatchers(HttpMethod.POST, "/devices/save").hasAnyRole("ADMIN", "OPERATOR")
-                // Toggle monitoring — ADMIN và OPERATOR
                 .requestMatchers(HttpMethod.POST, "/devices/toggle/**").hasAnyRole("ADMIN", "OPERATOR")
-                // Xóa — chỉ ADMIN
+                .requestMatchers(HttpMethod.POST, "/devices/maintenance/**", "/devices/*/maintenance/**").hasAnyRole("ADMIN", "OPERATOR")
+                .requestMatchers(HttpMethod.POST, "/devices/*/ports/save", "/devices/*/ports/*/toggle").hasAnyRole("ADMIN", "OPERATOR")
+                // Cảnh báo acknowledge & resolve — ADMIN và OPERATOR
+                .requestMatchers(HttpMethod.POST, "/alerts/*/acknowledge", "/alerts/*/resolve").hasAnyRole("ADMIN", "OPERATOR")
+                // Cấu hình giám sát & nhóm — ADMIN và OPERATOR
+                .requestMatchers(HttpMethod.POST, "/monitoring/save", "/monitoring/groups/save").hasAnyRole("ADMIN", "OPERATOR")
+                // Xóa thiết bị & xóa nhóm & xóa port — chỉ ADMIN
                 .requestMatchers(HttpMethod.POST, "/devices/delete/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.POST, "/devices/*/ports/*/delete").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.POST, "/monitoring/groups/delete/**").hasRole("ADMIN")
                 // Discovery API — ADMIN và OPERATOR
                 .requestMatchers(HttpMethod.POST, "/api/discovery/scan").hasAnyRole("ADMIN", "OPERATOR")
                 // Tất cả request khác cần đăng nhập

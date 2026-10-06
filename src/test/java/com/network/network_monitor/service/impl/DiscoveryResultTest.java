@@ -21,6 +21,7 @@ import com.network.network_monitor.config.MonitoringDefaults;
 import com.network.network_monitor.dto.ScanResponseDto.DiscoveredDevice;
 
 import com.network.network_monitor.config.DiscoveryLimits;
+import com.network.network_monitor.discovery.MacOuiDeviceTypeResolver;
 
 class DiscoveryResultTest {
 
@@ -51,7 +52,7 @@ class DiscoveryResultTest {
         factory.setProxyTargetClass(true);
         factory.addAdvice(new TransactionInterceptor(manager, attributes));
         var proxy = (DiscoveryTransactionService) factory.getProxy();
-        var result = new DiscoveryServiceImpl(proxy, new MonitoringDefaults(), testLimits()).persistDiscoveredDevices(
+        var result = new DiscoveryServiceImpl(proxy, new MonitoringDefaults(), testLimits(), new MacOuiDeviceTypeResolver()).persistDiscoveredDevices(
                 List.of(DiscoveredDevice.builder().ipAddress("first").build(),
                         DiscoveredDevice.builder().ipAddress("second").build()), "test");
         // DataIntegrityViolationException at commit → SKIPPED (concurrent scan duplicate)
@@ -71,7 +72,7 @@ class DiscoveryResultTest {
                 .thenReturn(DiscoveryOutcome.SKIPPED);
         var devices = List.of("1", "2", "3", "4", "5").stream()
                 .map(ip -> DiscoveredDevice.builder().ipAddress(ip).build()).toList();
-        var response = new DiscoveryServiceImpl(transaction, new MonitoringDefaults(), testLimits()).persistDiscoveredDevices(devices, "subnet");
+        var response = new DiscoveryServiceImpl(transaction, new MonitoringDefaults(), testLimits(), new MacOuiDeviceTypeResolver()).persistDiscoveredDevices(devices, "subnet");
         assertThat(response.getDiscovered()).isEqualTo(5);
         assertThat(response.getAdded()).isEqualTo(1);
         assertThat(response.getReactivated()).isEqualTo(1);

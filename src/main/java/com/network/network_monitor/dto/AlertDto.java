@@ -24,6 +24,8 @@ public class AlertDto {
     private String message;
     private AlertSeverity severity;
     private AlertStatus status;
+    private String acknowledgedBy;
+    private LocalDateTime acknowledgedAt;
     private LocalDateTime triggeredAt;
     private LocalDateTime resolvedAt;
 }

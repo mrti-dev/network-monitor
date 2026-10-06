@@ -132,14 +132,13 @@ jdbc:mysql://localhost:3306/network_monitor?useSSL=false&allowPublicKeyRetrieval
 | `spring.jpa.show-sql`                        | `false`    | Không log SQL query ở production.                                                      |
 | `spring.jpa.properties.hibernate.format_sql` | `true`     | Format SQL đẹp khi debug.                                                              |
 
-### 4.4 Schema Migration (Khuyến Nghị)
+### 4.4 Schema Migration (Flyway)
 
 | Công cụ       | Phiên bản | Trạng thái                                                    |
 | ------------- | --------- | ------------------------------------------------------------- |
-| **Flyway**    | 10.x      | **KHUYẾN NGHỊ** thêm — quản lý migration script theo version. |
-| **Liquibase** | 4.x       | Alternative thay thế Flyway.                                  |
+| **Flyway**    | 10.x / Spring Boot Managed | **ĐÃ TRIỂN KHAI** — quản lý migration script theo version (`V1__init_schema.sql`). |
 
-> Hiện tại dự án dùng `ddl-auto=validate` nên cần duy trì DDL script thủ công hoặc bổ sung Flyway/Liquibase.
+> Dự án dùng Flyway kết hợp `ddl-auto=validate` trong production và `create-drop` trong H2 test suite.
 
 ### 4.5 H2 Database (Test Only)
 
@@ -204,7 +203,7 @@ jdbc:mysql://localhost:3306/network_monitor?useSSL=false&allowPublicKeyRetrieval
 | --------- | -------- | --------- | ------------------- | ------------------------------- |
 | WebSocket | Mọi mức  | <100ms    | `notification_logs` | `spring-boot-starter-websocket` |
 
-> *Ghi chú:* Đã loại bỏ kênh thông báo Telegram Bot và Email/SMTP theo yêu cầu kiến trúc, chỉ duy trì thông báo thời gian thực qua WebSocket và ghi nhận nhật ký hệ thống.
+> *Ghi chú:* Hệ thống duy trì thông báo thời gian thực nội bộ qua WebSocket và ghi nhận nhật ký hệ thống.
 
 ---
 

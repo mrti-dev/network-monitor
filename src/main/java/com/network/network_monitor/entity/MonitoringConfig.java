@@ -43,17 +43,17 @@ public class MonitoringConfig {
     @JoinColumn(name = "device_id")
     private Device device;
 
-    @Column(name = "ping_interval", nullable = false)
+    @Column(name = "ping_interval")
     private Integer pingInterval;
 
-    @Column(name = "timeout_ms", nullable = false)
+    @Column(name = "timeout_ms")
     private Integer timeoutMs;
 
-    @Column(name = "latency_threshold", nullable = false)
+    @Column(name = "latency_threshold")
     private Double latencyThreshold;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "strategy_type", nullable = false, length = 20)
+    @Column(name = "strategy_type", length = 20)
     private ProbingMethod strategyType;
 
     @Column(name = "created_at", updatable = false)

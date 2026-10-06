@@ -1,4 +1,96 @@
-<!DOCTYPE html><html lang="vi" xmlns:th="http://www.thymeleaf.org"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NDMMS · Thiết bị</title><link rel="stylesheet" th:href="@{/css/ndmms.css}"></head><body><div class="app-shell"><aside th:replace="~{fragments/shell :: sidebar('devices')}"></aside><main class="workspace"><header th:replace="~{fragments/shell :: top('INVENTORY / DEVICE FORM',${deviceForm.id == null ? 'Thêm thiết bị mới' : 'Cập nhật thiết bị'})}"></header>
-<form class="panel" th:action="@{/devices/save}" th:object="${deviceForm}" method="post" style="max-width:980px"><div class="panel-title"><h2>Thông tin thiết bị</h2><small>CÁC TRƯỜNG * LÀ BẮT BUỘC</small></div><div class="flash error" th:if="${errorMessage}" th:text="${errorMessage}"></div><input type="hidden" th:field="*{id}"><div class="form-grid">
-<div class="field span-2"><label>Tên thiết bị *</label><input class="form-control" th:field="*{name}"><small class="CRITICAL" th:errors="*{name}"></small></div><div class="field"><label>Địa chỉ IP *</label><input class="form-control mono" th:field="*{ipAddress}" placeholder="192.168.1.1"><small class="CRITICAL" th:errors="*{ipAddress}"></small></div><div class="field"><label>Địa chỉ MAC</label><input class="form-control mono" th:field="*{macAddress}" placeholder="00:1A:2B:3C:4D:5E"><small class="CRITICAL" th:errors="*{macAddress}"></small></div><div class="field"><label>Loại thiết bị</label><select class="form-select" th:field="*{deviceType}"><option th:each="t : ${deviceTypes}" th:value="${t}" th:text="${t}"></option></select></div><div class="field"><label>Vị trí</label><input class="form-control" th:field="*{location}" placeholder="Tầng 1 - Phòng IT"></div>
-</div><div class="panel-title" style="margin-top:28px"><h2>Cấu hình đo riêng</h2><small>ICMP ECHO</small></div><div class="form-grid"><div class="field"><label>Chu kỳ đo (giây)</label><input class="form-control mono" type="number" min="1" max="86400" th:field="*{pingInterval}"></div><div class="field"><label>Timeout (ms)</label><input class="form-control mono" type="number" min="1" max="60000" th:field="*{timeoutMs}"></div><div class="field span-2"><label>Ngưỡng độ trễ (ms)</label><input class="form-control mono" type="number" min="1" max="60000" step=".1" th:field="*{latencyThreshold}"></div></div><div class="toolbar" style="justify-content:flex-end;margin-top:24px"><a class="btn" th:href="@{/inventory}">Hủy</a><button class="btn btn-primary" type="submit">Lưu thiết bị</button></div></form><footer th:replace="~{fragments/shell :: footer}"></footer></main></div></body></html>
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>NDMMS · Thiết bị</title>
+  <link rel="stylesheet" th:href="@{/css/ndmms.css}">
+</head>
+<body>
+<div class="app-shell">
+  <aside th:replace="~{fragments/shell :: sidebar('devices')}"></aside>
+  <main class="workspace">
+    <header th:replace="~{fragments/shell :: top('INVENTORY / DEVICE FORM',${deviceForm.id == null ? 'Thêm thiết bị mới' : 'Cập nhật thiết bị'})}"></header>
+
+    <form class="panel" th:action="@{/devices/save}" th:object="${deviceForm}" method="post" style="max-width:980px">
+      <div class="panel-title">
+        <h2>Thông tin thiết bị</h2>
+        <small>CÁC TRƯỜNG * LÀ BẮT BUỘC</small>
+      </div>
+
+      <div class="flash error" th:if="${errorMessage}" th:text="${errorMessage}"></div>
+      <input type="hidden" th:field="*{id}">
+
+      <div class="form-grid">
+        <div class="field span-2">
+          <label>Tên thiết bị *</label>
+          <input class="form-control" th:field="*{name}" placeholder="Ví dụ: Router Gateway HN-01" required>
+          <small class="CRITICAL" th:errors="*{name}"></small>
+        </div>
+        <div class="field">
+          <label>Địa chỉ IP *</label>
+          <input class="form-control mono" th:field="*{ipAddress}" placeholder="192.168.1.1" required>
+          <small class="CRITICAL" th:errors="*{ipAddress}"></small>
+        </div>
+        <div class="field">
+          <label>Địa chỉ MAC</label>
+          <input class="form-control mono" th:field="*{macAddress}" placeholder="00:1A:2B:3C:4D:5E">
+          <small class="CRITICAL" th:errors="*{macAddress}"></small>
+        </div>
+        <div class="field">
+          <label>Loại thiết bị</label>
+          <select class="form-select" th:field="*{deviceType}">
+            <option value="">-- Chưa xác định --</option>
+            <option th:each="t : ${deviceTypes}" th:value="${t}" th:text="${t}"></option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Nhóm thiết bị</label>
+          <select class="form-select" th:field="*{groupId}">
+            <option value="">-- Không phân nhóm --</option>
+            <option th:each="g : ${deviceGroups}" th:value="${g.id}" th:text="${g.name}"></option>
+          </select>
+        </div>
+        <div class="field span-2">
+          <label>Vị trí</label>
+          <input class="form-control" th:field="*{location}" placeholder="Tầng 1 - Phòng IT">
+        </div>
+      </div>
+
+      <div class="panel-title" style="margin-top:28px">
+        <div>
+          <h2>Cấu hình đo riêng</h2>
+          <small class="muted">Để trống các ô dưới đây để tự động dùng cấu hình của Nhóm thiết bị (hoặc mặc định hệ thống)</small>
+        </div>
+        <small>ICMP ECHO / PING</small>
+      </div>
+
+      <div class="form-grid">
+        <div class="field">
+          <label>Chu kỳ đo (giây, 1 - 86400)</label>
+          <input class="form-control mono" type="number" min="1" max="86400" th:field="*{pingInterval}">
+          <small class="CRITICAL" th:errors="*{pingInterval}"></small>
+        </div>
+        <div class="field">
+          <label>Timeout (ms, 1 - 60000)</label>
+          <input class="form-control mono" type="number" min="1" max="60000" th:field="*{timeoutMs}">
+          <small class="CRITICAL" th:errors="*{timeoutMs}"></small>
+        </div>
+        <div class="field span-2">
+          <label>Ngưỡng độ trễ (ms, 1 - 60000)</label>
+          <input class="form-control mono" type="number" min="1" max="60000" step=".1" th:field="*{latencyThreshold}">
+          <small class="CRITICAL" th:errors="*{latencyThreshold}"></small>
+        </div>
+      </div>
+
+      <div class="toolbar" style="justify-content:flex-end;margin-top:24px">
+        <a class="btn" th:href="@{/inventory}">Hủy</a>
+        <button class="btn btn-primary" type="submit">Lưu thiết bị</button>
+      </div>
+    </form>
+
+    <footer th:replace="~{fragments/shell :: footer}"></footer>
+  </main>
+</div>
+</body>
+</html>

@@ -1,8 +1,9 @@
 package com.network.network_monitor.dto;
 
+import com.network.network_monitor.enums.DeviceType;
+import java.util.List;
 import lombok.Builder;
 import lombok.Data;
-import java.util.List;
 
 @Data
 @Builder
@@ -22,6 +23,7 @@ public class ScanResponseDto {
     public static class DiscoveredDevice {
         private String ipAddress;
         private String macAddress;
+        private DeviceType deviceType;
         private double latencyMs;
         private boolean isNew;
         private DiscoveryOutcome outcome;

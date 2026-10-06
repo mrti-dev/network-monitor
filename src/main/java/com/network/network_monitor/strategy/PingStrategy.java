@@ -20,7 +20,11 @@ public class PingStrategy implements ProbingStrategy {
     @Override
     public ProbeResult probe(Device device) {
         MonitoringConfig config = device.getMonitoringConfig();
-        int timeoutMs = config != null && config.getTimeoutMs() != null ? config.getTimeoutMs() : defaults.getTimeoutMs();
+        int timeoutMs = config != null && config.getTimeoutMs() != null
+                ? config.getTimeoutMs()
+                : (device.getGroup() != null && device.getGroup().getTimeoutMs() != null
+                        ? device.getGroup().getTimeoutMs()
+                        : defaults.getTimeoutMs());
 
         try {
             long startTime = System.currentTimeMillis();

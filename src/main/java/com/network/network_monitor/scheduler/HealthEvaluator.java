@@ -34,7 +34,9 @@ public class HealthEvaluator {
         Long deviceId = device.getId();
         Double threshold = (device.getMonitoringConfig() != null && device.getMonitoringConfig().getLatencyThreshold() != null)
                 ? device.getMonitoringConfig().getLatencyThreshold()
-                : defaults.getLatencyThreshold();
+                : (device.getGroup() != null && device.getGroup().getLatencyThreshold() != null
+                        ? device.getGroup().getLatencyThreshold()
+                        : defaults.getLatencyThreshold());
 
         if (!result.isReachable()) {
             successCounts.remove(deviceId);

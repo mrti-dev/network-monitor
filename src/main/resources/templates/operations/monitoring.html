@@ -1,5 +1,209 @@
-<!DOCTYPE html><html lang="vi" xmlns:th="http://www.thymeleaf.org"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NDMMS · Cấu hình</title><link rel="stylesheet" th:href="@{/css/ndmms.css}"><script th:src="@{/js/ndmms.js}" defer></script></head><body><div class="app-shell"><aside th:replace="~{fragments/shell :: sidebar('monitoring')}"></aside><main class="workspace"><header th:replace="~{fragments/shell :: top('CẤU HÌNH HỆ THỐNG / CONFIG','Cấu hình các thông số giám sát')}"></header>
-<section class="grid config-grid"><div class="grid"><article class="panel"><div class="panel-title"><h2>Nhóm thiết bị giám sát</h2></div><div class="stack"><div class="choice active">Core Infrastructure (Mạng lõi)</div><div class="choice">Phòng ban / Ban Giám đốc</div><div class="choice">Máy chủ dịch vụ</div><div class="choice">Hệ thống WiFi công cộng</div></div></article><article class="panel"><div class="panel-title"><h2>Thiết bị chọn nhanh</h2></div><div class="stack"><a class="choice" th:each="d : ${devicePage.content}" th:href="@{/devices/edit/{id}(id=${d.id})}" th:text="${d.name}"></a><div class="empty" th:if="${#lists.isEmpty(devicePage.content)}">Chưa có thiết bị</div></div></article></div>
-<div class="grid"><section class="grid" style="grid-template-columns:1fr 1fr"><article class="panel"><div class="panel-title"><h2>Cấu hình SNMP</h2><small>V1 / V2C / V3</small></div><div class="field"><label>SNMP Community String</label><input class="form-control mono" value="public" disabled></div><div class="form-grid" style="margin-top:12px"><div class="field"><label>SNMP Port</label><input class="form-control mono" value="161" disabled></div><div class="field"><label>Phiên bản</label><select class="form-select" disabled><option>SNMP v2c</option></select></div></div><p class="muted">Chưa kết nối SNMP backend.</p></article><article class="panel"><div class="panel-title"><h2>Cấu hình Ping / ICMP</h2><small>ICMP ECHO</small></div><div class="field"><label>Chu kỳ Ping</label><input class="form-control" value="15 giây" disabled></div><div class="form-grid" style="margin-top:12px"><div class="field"><label>Timeout</label><input class="form-control mono" value="500 ms" disabled></div><div class="field"><label>Ngưỡng cảnh báo</label><input class="form-control mono" value="150 ms" disabled></div></div></article></section>
-<article class="panel"><div class="panel-title"><h2>Chọn mẫu giám sát nhanh</h2></div><div class="grid channel-grid"><div class="choice active"><strong>Mẫu Router</strong><p class="muted">ICMP và kiểm tra cổng cơ bản</p></div><div class="choice"><strong>Mẫu Switch</strong><p class="muted">Giám sát độ trễ và trạng thái</p></div><div class="choice"><strong>Mẫu Server</strong><p class="muted">Ping tần suất cao</p></div><div class="choice"><strong>Mẫu Access Point</strong><p class="muted">Theo dõi tính sẵn sàng</p></div></div></article>
-<article class="panel"><div class="panel-title"><h2>Cấu hình ngưỡng chỉ số</h2></div><table class="data-table"><thead><tr><th>Tên chỉ số</th><th>Cảnh báo</th><th>Nghiêm trọng</th></tr></thead><tbody><tr><td>Độ trễ ICMP</td><td><span class="badge WARNING">150ms</span></td><td><span class="badge CRITICAL">300ms</span></td></tr><tr><td>Packet Loss</td><td><span class="badge WARNING">5%</span></td><td><span class="badge CRITICAL">20%</span></td></tr><tr><td>Thiết bị mất kết nối</td><td><span class="badge WARNING">2 lần</span></td><td><span class="badge CRITICAL">3 lần</span></td></tr></tbody></table></article></div></section><footer th:replace="~{fragments/shell :: footer}"></footer></main></div></body></html>
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security6">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>NDMMS · Cấu hình giám sát</title>
+  <link rel="stylesheet" th:href="@{/css/ndmms.css}">
+  <script th:src="@{/js/ndmms.js}" defer></script>
+</head>
+<body>
+<div class="app-shell">
+  <aside th:replace="~{fragments/shell :: sidebar('monitoring')}"></aside>
+  <main class="workspace">
+    <header th:replace="~{fragments/shell :: top('CẤU HÌNH HỆ THỐNG / CONFIG','Cấu hình tham số giám sát & nhóm thiết bị')}"></header>
+
+    <div class="flash" th:if="${successMessage}" th:text="${successMessage}"></div>
+    <div class="flash error" th:if="${errorMessage}" th:text="${errorMessage}"></div>
+
+    <section class="grid config-grid">
+      <!-- Cột trái: Danh sách nhóm & thiết bị -->
+      <div class="grid">
+        <article class="panel">
+          <div class="panel-title">
+            <h2>Nhóm thiết bị</h2>
+            <small th:text="${#lists.size(groups) + ' nhóm'}">0 nhóm</small>
+          </div>
+          <div class="stack">
+            <div class="choice" th:each="g : ${groups}" style="display:flex;justify-content:space-between;align-items:center">
+              <div>
+                <strong th:text="${g.name}">Tên nhóm</strong>
+                <small class="muted" style="display:block" th:text="${(g.description ?: 'Không có mô tả') + ' (' + g.deviceCount + ' thiết bị)'}"></small>
+                <small class="mono muted" style="display:block" th:text="${'Ping: ' + (g.pingInterval ?: 15) + 's · Timeout: ' + (g.timeoutMs ?: 2000) + 'ms · Ngưỡng: ' + (g.latencyThreshold ?: 150) + 'ms'}"></small>
+              </div>
+              <div sec:authorize="hasRole('ADMIN')">
+                <form th:action="@{/monitoring/groups/delete/{id}(id=${g.id})}" method="post" onsubmit="return confirm('Bạn có chắc muốn xóa nhóm này? Thiết bị sẽ được gỡ khỏi nhóm nhưng không bị xóa.');">
+                  <button class="btn btn-danger" style="min-height:28px;padding:2px 8px;font-size:11px" type="submit">Xóa</button>
+                </form>
+              </div>
+            </div>
+            <div class="empty compact" th:if="${#lists.isEmpty(groups)}">Chưa có nhóm nào.</div>
+          </div>
+
+          <div style="margin-top:18px" sec:authorize="hasAnyRole('ADMIN','OPERATOR')">
+            <h3>Thêm / Cập nhật nhóm mới</h3>
+            <form th:action="@{/monitoring/groups/save}" th:object="${groupForm}" method="post">
+              <div class="field" style="margin-top:8px">
+                <label>Tên nhóm *</label>
+                <input class="form-control" th:field="*{name}" placeholder="Ví dụ: Máy chủ dịch vụ" required>
+              </div>
+              <div class="field" style="margin-top:8px">
+                <label>Mô tả</label>
+                <input class="form-control" th:field="*{description}" placeholder="Mô tả chức năng">
+              </div>
+              <div class="form-grid" style="margin-top:8px">
+                <div class="field">
+                  <label>Chu kỳ (s)</label>
+                  <input class="form-control mono" type="number" min="1" max="86400" th:field="*{pingInterval}" placeholder="15">
+                </div>
+                <div class="field">
+                  <label>Timeout (ms)</label>
+                  <input class="form-control mono" type="number" min="1" max="60000" th:field="*{timeoutMs}" placeholder="2000">
+                </div>
+              </div>
+              <div class="field" style="margin-top:8px">
+                <label>Ngưỡng trễ (ms)</label>
+                <input class="form-control mono" type="number" min="1" max="60000" step=".1" th:field="*{latencyThreshold}" placeholder="150">
+              </div>
+              <button class="btn btn-primary btn-block" style="margin-top:12px" type="submit">Lưu nhóm</button>
+            </form>
+          </div>
+        </article>
+      </div>
+
+      <!-- Cột phải: Cấu hình giám sát theo thiết bị -->
+      <div class="grid">
+        <article class="panel">
+          <div class="panel-title">
+            <h2>Cấu hình giám sát thiết bị cụ thể</h2>
+            <small>ICMP / PING</small>
+          </div>
+          <form th:action="@{/monitoring/save}" method="post">
+            <div class="field">
+              <label>Chọn thiết bị để cấu hình *</label>
+              <select class="form-select" name="deviceId" id="deviceSelect" required onchange="updateDeviceFormValues(this)">
+                <option value="">-- Chọn thiết bị --</option>
+                <option th:each="d : ${devicePage.content}"
+                        th:value="${d.id}"
+                        th:text="${(d.name ?: d.ipAddress) + ' (' + d.ipAddress + ')'}"
+                        th:data-ping="${d.pingInterval ?: 15}"
+                        th:data-timeout="${d.timeoutMs ?: 2000}"
+                        th:data-threshold="${d.latencyThreshold ?: 150}"
+                        th:data-group="${d.groupId ?: ''}"
+                        th:data-monitored="${d.isMonitored}"
+                        th:data-maintenance="${d.status != null and d.status.name() == 'MAINTENANCE'}"
+                        th:selected="${selectedDeviceId == d.id}"></option>
+              </select>
+            </div>
+
+            <div class="form-grid" style="margin-top:14px">
+              <div class="field">
+                <label>Nhóm thiết bị</label>
+                <select class="form-select" name="groupId" id="formGroupId">
+                  <option value="">-- Không phân nhóm --</option>
+                  <option th:each="g : ${groups}" th:value="${g.id}" th:text="${g.name}"></option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Chu kỳ ping (giây, 1 - 86400) *</label>
+                <input class="form-control mono" type="number" name="pingInterval" id="formPingInterval" min="1" max="86400" value="15" required>
+              </div>
+            </div>
+
+            <div class="form-grid" style="margin-top:14px">
+              <div class="field">
+                <label>Timeout kết nối (ms, 1 - 60000) *</label>
+                <input class="form-control mono" type="number" name="timeoutMs" id="formTimeoutMs" min="1" max="60000" value="2000" required>
+              </div>
+              <div class="field">
+                <label>Ngưỡng cảnh báo độ trễ (ms) *</label>
+                <input class="form-control mono" type="number" step=".1" name="latencyThreshold" id="formLatencyThreshold" min="1" max="60000" value="150" required>
+              </div>
+            </div>
+
+            <div class="form-grid" style="margin-top:14px">
+              <div class="field">
+                <label>Trạng thái giám sát</label>
+                <select class="form-select" name="isMonitored" id="formMonitored">
+                  <option value="true">BẬT giám sát</option>
+                  <option value="false">TẮT giám sát</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Chế độ bảo trì (Maintenance)</label>
+                <select class="form-select" name="maintenanceMode" id="formMaintenance">
+                  <option value="false">Hoạt động bình thường</option>
+                  <option value="true">BẢO TRÌ (Vô hiệu hóa cảnh báo)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="field" style="margin-top:14px">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                <input type="checkbox" name="useGroupConfig" id="formUseGroupConfig" value="true">
+                <span>Dùng cấu hình của nhóm (Xóa override riêng của thiết bị này)</span>
+              </label>
+            </div>
+
+            <div class="toolbar" style="justify-content:flex-end;margin-top:20px" sec:authorize="hasAnyRole('ADMIN','OPERATOR')">
+              <button class="btn btn-primary" type="submit">Lưu cấu hình thiết bị</button>
+            </div>
+            <div class="muted" style="margin-top:10px" sec:authorize="hasRole('VIEWER')">
+              <em>Bạn đang xem ở chế độ VIEWER (chỉ đọc).</em>
+            </div>
+          </form>
+        </article>
+
+        <article class="panel">
+          <div class="panel-title">
+            <h2>Quy tắc chống flapping & Chuẩn ngưỡng mặc định</h2>
+          </div>
+          <table class="data-table">
+            <thead>
+              <tr><th>Chỉ số</th><th>Ngưỡng cảnh báo (WARNING)</th><th>Ngưỡng nghiêm trọng (OFFLINE)</th><th>Cơ chế phục hồi</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Độ trễ (Latency)</td>
+                <td><span class="badge WARNING">&gt; 150 ms</span></td>
+                <td><span class="badge CRITICAL">Mất kết nối</span></td>
+                <td>Độ trễ &le; ngưỡng</td>
+              </tr>
+              <tr>
+                <td>Thất bại liên tiếp</td>
+                <td>1 lần (giữ nguyên)</td>
+                <td><span class="badge CRITICAL">&ge; 3 lần liên tiếp</span></td>
+                <td>Thành công &ge; 2 lần liên tiếp</td>
+              </tr>
+              <tr>
+                <td>Chế độ bảo trì</td>
+                <td colspan="3"><span class="badge MAINTENANCE">MAINTENANCE</span> — Tắt 100% cảnh báo, reset toàn bộ bộ đếm flapping.</td>
+              </tr>
+            </tbody>
+          </table>
+        </article>
+      </div>
+    </section>
+
+    <footer th:replace="~{fragments/shell :: footer}"></footer>
+  </main>
+</div>
+
+<script>
+function updateDeviceFormValues(selectEl) {
+  const opt = selectEl.options[selectEl.selectedIndex];
+  if (!opt || !opt.value) return;
+  document.getElementById('formPingInterval').value = opt.dataset.ping || '15';
+  document.getElementById('formTimeoutMs').value = opt.dataset.timeout || '2000';
+  document.getElementById('formLatencyThreshold').value = opt.dataset.threshold || '150';
+  document.getElementById('formGroupId').value = opt.dataset.group || '';
+  document.getElementById('formMonitored').value = opt.dataset.monitored || 'true';
+  document.getElementById('formMaintenance').value = opt.dataset.maintenance === 'true' ? 'true' : 'false';
+}
+document.addEventListener('DOMContentLoaded', () => {
+  const sel = document.getElementById('deviceSelect');
+  if (sel && sel.selectedIndex > 0) updateDeviceFormValues(sel);
+});
+</script>
+</body>
+</html>

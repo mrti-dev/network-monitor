@@ -1,6 +1,121 @@
-<!DOCTYPE html><html lang="vi" xmlns:th="http://www.thymeleaf.org"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NDMMS · Thiết bị</title><link rel="stylesheet" th:href="@{/css/ndmms.css}"><script th:src="@{/js/ndmms.js}" defer></script></head><body><div class="app-shell">
-<aside th:replace="~{fragments/shell :: sidebar('devices')}"></aside><main class="workspace"><header th:replace="~{fragments/shell :: top('INVENTORY / DEVICES','Quản lý danh sách thiết bị')}"></header>
-<section class="panel"><div class="panel-title"><div class="toolbar"><input class="form-control" placeholder="Tìm kiếm thiết bị, IP..." data-filter-table="#inventoryTable"><select class="form-select"><option>Tất cả trạng thái</option><option>ONLINE</option><option>WARNING</option><option>OFFLINE</option></select></div><a class="btn btn-primary" th:href="@{/devices/new}">Thêm thiết bị</a></div>
-<div class="table-wrap"><table class="data-table" id="inventoryTable"><thead><tr><th>Tên thiết bị / IP</th><th>Loại</th><th>MAC</th><th>Trạng thái</th><th>Vị trí</th><th>Thao tác</th></tr></thead><tbody>
-<tr th:each="d : ${devicePage.content}"><td class="device-name"><strong th:text="${d.name}"></strong><small th:text="${d.ipAddress}"></small></td><td th:text="${d.deviceType}"></td><td class="mono muted" th:text="${d.macAddress ?: '-'}"></td><td><span class="badge" th:classappend="${d.status}" th:text="${d.status}"></span></td><td th:text="${d.location ?: '-'}"></td><td><div class="toolbar"><a class="btn" th:href="@{/devices/metrics/{id}(id=${d.id})}">Theo dõi</a><a class="btn" th:href="@{/devices/edit/{id}(id=${d.id})}">Sửa</a></div></td></tr>
-<tr th:if="${#lists.isEmpty(devicePage.content)}"><td colspan="6"><div class="empty">Chưa có thiết bị trong hệ thống.</div></td></tr></tbody></table></div></section><footer th:replace="~{fragments/shell :: footer}"></footer></main></div></body></html>
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security6">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>NDMMS · Danh mục thiết bị</title>
+  <link rel="stylesheet" th:href="@{/css/ndmms.css}">
+  <script th:src="@{/js/ndmms.js}" defer></script>
+</head>
+<body>
+<div class="app-shell">
+  <aside th:replace="~{fragments/shell :: sidebar('devices')}"></aside>
+  <main class="workspace">
+    <header th:replace="~{fragments/shell :: top('INVENTORY / DEVICES','Quản lý danh mục thiết bị')}"></header>
+
+    <div class="flash" th:if="${successMessage}" th:text="${successMessage}"></div>
+    <div class="flash error" th:if="${errorMessage}" th:text="${errorMessage}"></div>
+
+    <section class="panel">
+      <div class="panel-title" style="flex-wrap:wrap;gap:12px">
+        <form class="toolbar" method="get" th:action="@{/inventory}" style="flex-wrap:wrap;gap:10px;width:100%">
+          <input class="form-control" style="max-width:200px" name="keyword" th:value="${filter?.keyword}" placeholder="Tìm tên, IP, MAC...">
+          <select class="form-select" style="max-width:150px" name="status">
+            <option value="">-- Trạng thái --</option>
+            <option th:each="st : ${deviceStatuses}" th:value="${st}" th:text="${st}" th:selected="${filter?.status == st}"></option>
+          </select>
+          <select class="form-select" style="max-width:150px" name="deviceType">
+            <option value="">-- Loại thiết bị --</option>
+            <option th:each="dt : ${deviceTypes}" th:value="${dt}" th:text="${dt}" th:selected="${filter?.deviceType == dt}"></option>
+          </select>
+          <select class="form-select" style="max-width:160px" name="groupId">
+            <option value="">-- Nhóm thiết bị --</option>
+            <option th:each="g : ${deviceGroups}" th:value="${g.id}" th:text="${g.name}" th:selected="${filter?.groupId == g.id}"></option>
+          </select>
+          <input class="form-control" style="max-width:150px" name="location" th:value="${filter?.location}" placeholder="Vị trí...">
+          <select class="form-select" style="max-width:130px" name="monitored">
+            <option value="">-- Giám sát --</option>
+            <option value="true" th:selected="${filter?.monitored == true}">Bật</option>
+            <option value="false" th:selected="${filter?.monitored == false}">Tắt</option>
+          </select>
+          <button class="btn btn-primary" type="submit">Lọc</button>
+          <a class="btn btn-outline" th:href="@{/inventory}">Xóa bộ lọc</a>
+          <a class="btn btn-primary" style="margin-left:auto" th:href="@{/devices/new}" sec:authorize="hasAnyRole('ADMIN','OPERATOR')">Thêm thiết bị mới</a>
+        </form>
+      </div>
+
+      <div class="table-wrap">
+        <table class="data-table" id="inventoryTable">
+          <thead>
+            <tr>
+              <th>Tên thiết bị / IP</th>
+              <th>Loại</th>
+              <th>MAC</th>
+              <th>Nhóm</th>
+              <th>Vị trí</th>
+              <th>Trạng thái</th>
+              <th>Giám sát</th>
+              <th>Thao tác</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr th:each="d : ${devicePage.content}">
+              <td class="device-name">
+                <strong th:text="${d.name ?: 'Chưa đặt tên'}"></strong>
+                <small class="mono" th:text="${d.ipAddress}"></small>
+              </td>
+              <td><span class="badge UNKNOWN" th:text="${d.deviceType ?: '-'}"></span></td>
+              <td class="mono muted" th:text="${d.macAddress ?: '-'}"></td>
+              <td><span th:text="${d.groupName ?: '-'}"></span></td>
+              <td th:text="${d.location ?: '-'}"></td>
+              <td><span class="badge" th:classappend="${d.status}" th:text="${d.status}"></span></td>
+              <td>
+                <form th:action="@{/devices/toggle/{id}(id=${d.id})}" method="post" style="display:inline" sec:authorize="hasAnyRole('ADMIN','OPERATOR')">
+                  <button type="submit" class="badge" th:classappend="${d.isMonitored ? 'ONLINE' : 'UNKNOWN'}"
+                          th:text="${d.isMonitored ? 'BẬT' : 'TẮT'}" style="cursor:pointer;background:transparent" title="Nhấn để bật/tắt giám sát"></button>
+                </form>
+                <span class="badge" th:classappend="${d.isMonitored ? 'ONLINE' : 'UNKNOWN'}"
+                      th:text="${d.isMonitored ? 'BẬT' : 'TẮT'}" sec:authorize="hasRole('VIEWER')"></span>
+              </td>
+              <td>
+                <div class="toolbar" style="gap:5px">
+                  <a class="btn" style="min-height:30px;padding:2px 8px;font-size:12px" th:href="@{/devices/metrics/{id}(id=${d.id})}">Theo dõi</a>
+                  <a class="btn" style="min-height:30px;padding:2px 8px;font-size:12px" th:href="@{/devices/{id}/ports(id=${d.id})}">Ports</a>
+                  <a class="btn" style="min-height:30px;padding:2px 8px;font-size:12px" th:href="@{/devices/edit/{id}(id=${d.id})}" sec:authorize="hasAnyRole('ADMIN','OPERATOR')">Sửa</a>
+                  <form th:action="@{/devices/maintenance/{id}(id=${d.id})}" method="post" style="display:inline" sec:authorize="hasAnyRole('ADMIN','OPERATOR')">
+                    <button type="submit" class="btn btn-outline" style="min-height:30px;padding:2px 8px;font-size:12px"
+                            th:text="${d.status != null and d.status.name() == 'MAINTENANCE' ? 'Bỏ bảo trì' : 'Bảo trì'}">Bảo trì</button>
+                  </form>
+                  <form th:action="@{/devices/delete/{id}(id=${d.id})}" method="post" style="display:inline" sec:authorize="hasRole('ADMIN')"
+                        onsubmit="return confirm('Bạn có chắc chắn muốn xóa thiết bị này?');">
+                    <button type="submit" class="btn btn-danger" style="min-height:30px;padding:2px 8px;font-size:12px">Xóa</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            <tr th:if="${#lists.isEmpty(devicePage.content)}">
+              <td colspan="8"><div class="empty">Không tìm thấy thiết bị nào phù hợp với điều kiện lọc.</div></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="pagination-bar">
+        <span>Hiển thị <span th:text="${devicePage.totalElements == 0 ? 0 : devicePage.number * devicePage.size + 1}">0</span>
+          đến <span th:text="${devicePage.totalElements == 0 ? 0 : devicePage.number * devicePage.size + devicePage.numberOfElements}">0</span>
+          của <span th:text="${devicePage.totalElements}">0</span> mục</span>
+        <nav class="pagination" th:if="${devicePage.totalPages > 1}">
+          <a class="btn" th:if="${devicePage.hasPrevious()}"
+             th:href="@{/inventory(page=${devicePage.number - 1},size=${devicePage.size},keyword=${filter?.keyword},status=${filter?.status},deviceType=${filter?.deviceType},groupId=${filter?.groupId},location=${filter?.location},monitored=${filter?.monitored})}">Trước</a>
+          <span th:text="${devicePage.number + 1} + ' / ' + ${devicePage.totalPages}"></span>
+          <a class="btn" th:if="${devicePage.hasNext()}"
+             th:href="@{/inventory(page=${devicePage.number + 1},size=${devicePage.size},keyword=${filter?.keyword},status=${filter?.status},deviceType=${filter?.deviceType},groupId=${filter?.groupId},location=${filter?.location},monitored=${filter?.monitored})}">Sau</a>
+        </nav>
+      </div>
+    </section>
+
+    <footer th:replace="~{fragments/shell :: footer}"></footer>
+  </main>
+</div>
+</body>
+</html>

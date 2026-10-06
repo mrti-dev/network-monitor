@@ -10,9 +10,9 @@
     <div class="flash" th:if="${param.logout}">Đã đăng xuất thành công.</div>
     <hr>
     <form th:action="@{/login}" method="post">
-      <div class="field"><label for="username">Tài khoản hoặc Email</label><input class="form-control" id="username" name="username" autocomplete="username" placeholder="Tên đăng nhập" required autofocus></div>
+      <div class="field"><label for="username">Tên đăng nhập</label><input class="form-control" id="username" name="username" autocomplete="username" placeholder="Tên đăng nhập" required autofocus></div>
       <div class="field" style="margin-top:18px"><label for="password">Mật khẩu truy cập</label><input class="form-control" id="password" type="password" name="password" autocomplete="current-password" placeholder="••••••••••••" required></div>
-      <div class="field" style="margin-top:24px"><label>Vai trò vận hành</label><div class="role-switch"><div class="role-option active"><strong>Admin</strong><small>Quản trị viên — Toàn quyền quản lý hệ thống</small></div><div class="role-option"><strong>Viewer</strong><small>Người xem — Chỉ xem báo cáo và giám sát</small></div></div></div>
+      <p class="login-hint">Quyền truy cập được xác định tự động theo tài khoản.</p>
       <button class="btn btn-primary btn-block" type="submit">Đăng nhập hệ thống</button>
     </form>
     <div class="login-footer"><a th:href="@{/register}">Đăng ký tài khoản mới</a></div>

@@ -12,6 +12,8 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.PrePersist;
@@ -45,7 +47,8 @@ import org.hibernate.jdbc.Expectation;
         @Index(name = "idx_device_status", columnList = "status"),
         @Index(name = "idx_device_type", columnList = "device_type"),
         @Index(name = "idx_device_ip", columnList = "ip_address"),
-        @Index(name = "idx_device_monitored", columnList = "is_monitored")
+        @Index(name = "idx_device_monitored", columnList = "is_monitored"),
+        @Index(name = "idx_device_group", columnList = "group_id")
 })
 @SQLDelete(sql = "UPDATE devices SET is_deleted = true, version = version + 1 WHERE id = ? AND version = ?", verify = Expectation.RowCount.class)
 @SQLRestriction("is_deleted = false")
@@ -72,8 +75,17 @@ public class Device {
     @Column(name = "status", nullable = false, length = 20)
     private DeviceStatus status;
 
+    @Enumerated(EnumType.STRING)
+    @Builder.Default
+    @Column(name = "maintenance_source", nullable = false, length = 20)
+    private com.network.network_monitor.enums.MaintenanceSource maintenanceSource = com.network.network_monitor.enums.MaintenanceSource.NONE;
+
     @Column(name = "location", length = 255)
     private String location;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "group_id")
+    private DeviceGroup group;
 
     @Builder.Default
     @Column(name = "is_monitored", nullable = false)
@@ -108,11 +120,22 @@ public class Device {
     @Builder.Default
     private List<DeviceLog> deviceLogs = new ArrayList<>();
 
+    @OneToMany(mappedBy = "device", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @Builder.Default
+    private List<TcpPortMonitor> portMonitors = new ArrayList<>();
+
+    @OneToMany(mappedBy = "device", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @Builder.Default
+    private List<MaintenanceSchedule> maintenanceSchedules = new ArrayList<>();
+
     @PrePersist
     public void prePersist() {
         LocalDateTime now = LocalDateTime.now();
         this.createdAt = now;
         this.updatedAt = now;
+        if (this.maintenanceSource == null) {
+            this.maintenanceSource = com.network.network_monitor.enums.MaintenanceSource.NONE;
+        }
     }
 
     @PreUpdate

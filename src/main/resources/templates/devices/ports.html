@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>NDMMS · Quản lý Port TCP</title>
+  <link rel="stylesheet" th:href="@{/css/ndmms.css}">
+  <script th:src="@{/dist/js/sockjs.min.js}" defer></script>
+  <script th:src="@{/dist/js/stomp.min.js}" defer></script>
+  <script th:src="@{/js/websocket-client.js}" defer></script>
+</head>
+<body>
+<div class="app-shell">
+  <aside th:replace="~{fragments/shell :: sidebar('devices')}"></aside>
+  <main class="workspace">
+    <header th:replace="~{fragments/shell :: top('MONITORING / TCP SERVICES', 'Theo dõi dịch vụ TCP')}"></header>
+
+    <div class="flash" th:if="${successMessage}" th:text="${successMessage}"></div>
+    <div class="flash error" th:if="${errorMessage}" th:text="${errorMessage}"></div>
+
+    <section class="grid kpi-grid">
+      <article class="panel kpi">
+        <span class="label">Thiết bị</span>
+        <strong style="font-size:19px" th:text="${device.name}"></strong>
+        <small th:text="${device.ipAddress}"></small>
+      </article>
+      <article class="panel kpi">
+        <span class="label">Tổng số port</span>
+        <strong style="font-size:21px" th:text="${#lists.size(ports)}">0</strong>
+        <small>Port đang quản lý</small>
+      </article>
+      <article class="panel kpi">
+        <span class="label">Vị trí</span>
+        <strong th:text="${device.location ?: 'Hà Nội'}">Hà Nội</strong>
+        <small th:text="${device.deviceType != null ? device.deviceType : 'Thiết bị'}"></small>
+      </article>
+      <article class="panel kpi">
+        <span class="label">Thao tác</span>
+        <a class="btn" style="margin-top:6px;display:inline-block" th:href="@{/inventory}">Quay lại danh sách</a>
+      </article>
+    </section>
+
+    <!-- Bảng danh sách Ports -->
+    <section class="panel" style="margin-top:16px">
+      <div class="panel-title">
+        <h2>Danh sách cổng dịch vụ TCP</h2>
+        <small>REALTIME STATUS / SOCKET PROBING</small>
+      </div>
+
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Cổng</th>
+              <th>Dịch vụ</th>
+              <th>Trạng thái</th>
+              <th>Lần kiểm tra cuối</th>
+              <th>Timeout</th>
+              <th>Ngưỡng lỗi / hồi phục</th>
+              <th>Giám sát</th>
+              <th sec:authorize="hasAnyRole('ADMIN','OPERATOR')">Thao tác</th>
+            </tr>
+          </thead>
+          <tbody id="ports-table-body">
+            <tr th:each="p : ${ports}" th:id="'port-row-' + ${p.id}">
+              <td class="mono" style="font-weight:600" th:text="${p.port}">80</td>
+              <td th:text="${p.serviceName ?: '-'}">HTTP</td>
+              <td>
+                <span th:id="'port-badge-' + ${p.id}" class="badge"
+                      th:classappend="${p.status.name() == 'UP' ? 'ONLINE' : (p.status.name() == 'DOWN' ? 'OFFLINE' : 'UNKNOWN')}"
+                      th:text="${p.status.name()}">UNKNOWN</span>
+              </td>
+              <td class="mono muted" th:id="'port-checked-' + ${p.id}"
+                  th:text="${p.lastCheckedAt != null ? #temporals.format(p.lastCheckedAt, 'dd/MM/yyyy HH:mm:ss') : 'Chưa kiểm tra'}">-</td>
+              <td class="mono" th:text="${p.timeoutMs + ' ms'}">3000 ms</td>
+              <td class="mono" th:text="${p.failureThreshold + ' lỗi / ' + p.successThreshold + ' thành công'}">3 / 2</td>
+              <td>
+                <span class="badge" th:classappend="${p.enabled ? 'ONLINE' : 'OFFLINE'}"
+                      th:text="${p.enabled ? 'Bật' : 'Tắt'}">Bật</span>
+              </td>
+              <td sec:authorize="hasAnyRole('ADMIN','OPERATOR')">
+                <div style="display:flex;gap:6px;align-items:center">
+                  <form th:action="@{/devices/{deviceId}/ports/{portId}/toggle(deviceId=${device.id}, portId=${p.id})}" method="post">
+                    <button class="btn" style="padding:2px 8px;font-size:11px" type="submit"
+                            th:text="${p.enabled ? 'Tắt' : 'Bật'}">Tắt</button>
+                  </form>
+                  <form sec:authorize="hasRole('ADMIN')"
+                        th:action="@{/devices/{deviceId}/ports/{portId}/delete(deviceId=${device.id}, portId=${p.id})}"
+                        method="post" onsubmit="return confirm('Bạn có chắc chắn muốn xóa port này không?');">
+                    <button class="btn btn-danger" style="padding:2px 8px;font-size:11px" type="submit">Xóa</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            <tr th:if="${#lists.isEmpty(ports)}">
+              <td colspan="8">
+                <div class="empty">Chưa có cổng TCP nào được cấu hình cho thiết bị này.</div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Form thêm cấu hình Port (OPERATOR / ADMIN) -->
+    <section class="panel" style="margin-top:18px" sec:authorize="hasAnyRole('ADMIN','OPERATOR')">
+      <div class="panel-title">
+        <h2>Thêm cổng TCP cần theo dõi</h2>
+        <small>CẤU HÌNH THAM SỐ THĂM DÒ</small>
+      </div>
+
+      <form th:action="@{/devices/{deviceId}/ports/save(deviceId=${device.id})}" th:object="${portForm}" method="post">
+        <input type="hidden" th:field="*{deviceId}">
+        <div class="form-grid">
+          <div class="field">
+            <label>Cổng TCP (1–65535) *</label>
+            <input class="form-control mono" type="number" min="1" max="65535" th:field="*{port}" placeholder="Ví dụ: 80, 443, 3306" required>
+            <span class="field-error" th:if="${#fields.hasErrors('port')}" th:errors="*{port}"></span>
+          </div>
+          <div class="field">
+            <label>Tên dịch vụ</label>
+            <input class="form-control" type="text" maxlength="100" th:field="*{serviceName}" placeholder="Ví dụ: Web Server, MySQL, SSH">
+            <span class="field-error" th:if="${#fields.hasErrors('serviceName')}" th:errors="*{serviceName}"></span>
+          </div>
+        </div>
+
+        <div class="form-grid" style="margin-top:12px">
+          <div class="field">
+            <label>Timeout kết nối (ms)</label>
+            <input class="form-control mono" type="number" min="100" max="30000" th:field="*{timeoutMs}" placeholder="3000">
+            <span class="field-error" th:if="${#fields.hasErrors('timeoutMs')}" th:errors="*{timeoutMs}"></span>
+          </div>
+          <div class="field">
+            <label>Ngưỡng báo lỗi (lần)</label>
+            <input class="form-control mono" type="number" min="1" max="100" th:field="*{failureThreshold}" placeholder="3">
+            <span class="field-error" th:if="${#fields.hasErrors('failureThreshold')}" th:errors="*{failureThreshold}"></span>
+          </div>
+          <div class="field">
+            <label>Ngưỡng hồi phục (lần)</label>
+            <input class="form-control mono" type="number" min="1" max="100" th:field="*{successThreshold}" placeholder="2">
+            <span class="field-error" th:if="${#fields.hasErrors('successThreshold')}" th:errors="*{successThreshold}"></span>
+          </div>
+        </div>
+
+        <div style="margin-top:16px">
+          <button class="btn btn-primary" type="submit">Lưu cấu hình port</button>
+        </div>
+      </form>
+    </section>
+
+    <footer th:replace="~{fragments/shell :: footer}"></footer>
+  </main>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // Lắng nghe cập nhật realtime từ websocket-client nếu có
+    window.addEventListener('tcp-port-status-changed', (event) => {
+        const data = event.detail;
+        if (!data || !data.monitorId) return;
+
+        const badge = document.getElementById('port-badge-' + data.monitorId);
+        if (badge) {
+            badge.textContent = data.currentStatus;
+            badge.className = 'badge ' + (data.currentStatus === 'UP' ? 'ONLINE' : (data.currentStatus === 'DOWN' ? 'OFFLINE' : 'UNKNOWN'));
+        }
+
+        const checkedCell = document.getElementById('port-checked-' + data.monitorId);
+        if (checkedCell && data.timestamp) {
+            const date = new Date(data.timestamp);
+            checkedCell.textContent = date.toLocaleString('vi-VN');
+        }
+    });
+});
+</script>
+</body>
+</html>

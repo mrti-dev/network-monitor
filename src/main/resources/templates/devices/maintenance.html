@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>NDMMS · Lịch bảo trì thiết bị</title>
+  <link rel="stylesheet" th:href="@{/css/ndmms.css}">
+  <script th:src="@{/dist/js/sockjs.min.js}" defer></script>
+  <script th:src="@{/dist/js/stomp.min.js}" defer></script>
+  <script th:src="@{/js/websocket-client.js}" defer></script>
+</head>
+<body>
+<div class="app-shell">
+  <aside th:replace="~{fragments/shell :: sidebar('devices')}"></aside>
+  <main class="workspace">
+    <header th:replace="~{fragments/shell :: top('MAINTENANCE / SCHEDULE', 'Lịch bảo trì định kỳ')}"></header>
+
+    <div class="flash" th:if="${successMessage}" th:text="${successMessage}"></div>
+    <div class="flash error" th:if="${errorMessage}" th:text="${errorMessage}"></div>
+
+    <section class="grid kpi-grid">
+      <article class="panel kpi">
+        <span class="label">Thiết bị</span>
+        <strong style="font-size:19px" th:text="${device.name}"></strong>
+        <small th:text="${device.ipAddress}"></small>
+      </article>
+      <article class="panel kpi">
+        <span class="label">Tổng số lịch</span>
+        <strong style="font-size:21px" th:text="${#lists.size(schedules)}">0</strong>
+        <small>Lịch đã lên cho thiết bị này</small>
+      </article>
+      <article class="panel kpi">
+        <span class="label">Trạng thái bảo trì</span>
+        <strong id="device-maint-status" style="font-size:18px" th:text="${device.deviceType != null ? device.deviceType : 'Thiết bị'}"></strong>
+        <small th:text="${device.location ?: 'Không xác định'}"></small>
+      </article>
+      <article class="panel kpi">
+        <span class="label">Thao tác</span>
+        <a class="btn" style="margin-top:6px;display:inline-block" th:href="@{/inventory}">Quay lại danh sách</a>
+      </article>
+    </section>
+
+    <!-- Bảng danh sách Lịch bảo trì -->
+    <section class="panel" style="margin-top:16px">
+      <div class="panel-title">
+        <h2>Danh sách lịch bảo trì</h2>
+        <small>MAINTENANCE SCHEDULES & HISTORY</small>
+      </div>
+
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Tiêu đề</th>
+              <th>Lý do</th>
+              <th>Bắt đầu</th>
+              <th>Kết thúc</th>
+              <th>Trạng thái</th>
+              <th>Người tạo</th>
+              <th sec:authorize="hasAnyRole('ADMIN', 'OPERATOR')">Thao tác</th>
+            </tr>
+          </thead>
+          <tbody id="schedules-table-body">
+            <tr th:if="${#lists.isEmpty(schedules)}">
+              <td colspan="8" style="text-align:center;color:var(--text-muted);padding:24px">
+                Chưa có lịch bảo trì nào được thiết lập cho thiết bị này.
+              </td>
+            </tr>
+            <tr th:each="s : ${schedules}" th:id="'schedule-row-' + ${s.id}">
+              <td class="mono" th:text="${s.id}"></td>
+              <td style="font-weight:600" th:text="${s.title}"></td>
+              <td style="color:var(--text-muted)" th:text="${s.reason ?: '-'}"></td>
+              <td class="mono" th:text="${s.startsAt != null ? #temporals.format(s.startsAt, 'dd/MM/yyyy HH:mm') : '-'}"></td>
+              <td class="mono" th:text="${s.endsAt != null ? #temporals.format(s.endsAt, 'dd/MM/yyyy HH:mm') : '-'}"></td>
+              <td>
+                <span th:id="'schedule-badge-' + ${s.id}"
+                      th:class="'badge ' + (${s.status.name() == 'ACTIVE'} ? 'MAINTENANCE' : (${s.status.name() == 'SCHEDULED'} ? 'UNKNOWN' : (${s.status.name() == 'COMPLETED'} ? 'ONLINE' : 'OFFLINE')))"
+                      th:text="${s.status}">
+                </span>
+              </td>
+              <td style="font-size:12px" th:text="${s.createdByName ?: 'Hệ thống'}"></td>
+              <td sec:authorize="hasAnyRole('ADMIN', 'OPERATOR')">
+                <form th:if="${s.status.name() == 'SCHEDULED' || s.status.name() == 'ACTIVE'}"
+                      th:action="@{/devices/{deviceId}/maintenance/{scheduleId}/cancel(deviceId=${device.id},scheduleId=${s.id})}"
+                      method="post" style="display:inline" onsubmit="return confirm('Bạn có chắc chắn muốn hủy lịch này?');">
+                  <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                  <button type="submit" class="btn" style="color:#ef4444;border-color:rgba(239,68,68,0.3);padding:2px 8px;font-size:12px">Hủy</button>
+                </form>
+                <span th:if="${s.status.name() == 'COMPLETED' || s.status.name() == 'CANCELLED'}" style="color:var(--text-muted);font-size:12px">-</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Form Thêm / Đặt lịch bảo trì mới -->
+    <section class="panel" style="margin-top:16px" sec:authorize="hasAnyRole('ADMIN', 'OPERATOR')">
+      <div class="panel-title">
+        <h2>Đặt lịch bảo trì mới</h2>
+        <small>AUTOMATED MAINTENANCE WINDOW CONFIGURATION</small>
+      </div>
+
+      <form th:action="@{/devices/{deviceId}/maintenance/save(deviceId=${device.id})}"
+            th:object="${scheduleForm}" method="post" style="margin-top:12px">
+        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+        <input type="hidden" th:field="*{deviceId}">
+
+        <div class="form-grid">
+          <div class="field">
+            <label>Tiêu đề bảo trì *</label>
+            <input class="form-control" type="text" maxlength="150" th:field="*{title}" placeholder="Ví dụ: Nâng cấp firmware thiết bị" required>
+            <span class="field-error" th:if="${#fields.hasErrors('title')}" th:errors="*{title}"></span>
+          </div>
+          <div class="field">
+            <label>Lý do / Mô tả chi tiết</label>
+            <input class="form-control" type="text" maxlength="255" th:field="*{reason}" placeholder="Chi tiết công việc dự kiến">
+            <span class="field-error" th:if="${#fields.hasErrors('reason')}" th:errors="*{reason}"></span>
+          </div>
+        </div>
+
+        <div class="form-grid" style="margin-top:12px">
+          <div class="field">
+            <label>Thời gian bắt đầu *</label>
+            <input class="form-control mono" type="datetime-local" th:field="*{startsAt}" required>
+            <span class="field-error" th:if="${#fields.hasErrors('startsAt')}" th:errors="*{startsAt}"></span>
+          </div>
+          <div class="field">
+            <label>Thời gian kết thúc *</label>
+            <input class="form-control mono" type="datetime-local" th:field="*{endsAt}" required>
+            <span class="field-error" th:if="${#fields.hasErrors('endsAt')}" th:errors="*{endsAt}"></span>
+          </div>
+        </div>
+
+        <div style="margin-top:16px">
+          <button class="btn btn-primary" type="submit">Lưu lịch bảo trì</button>
+        </div>
+      </form>
+    </section>
+
+    <footer th:replace="~{fragments/shell :: footer}"></footer>
+  </main>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    if (window.ndmmsWs) {
+        window.ndmmsWs.subscribe('/topic/maintenance', (data) => {
+            if (!data || !data.scheduleId) return;
+
+            const badge = document.getElementById('schedule-badge-' + data.scheduleId);
+            if (badge && data.status) {
+                badge.textContent = data.status;
+                let badgeClass = 'badge ';
+                if (data.status === 'ACTIVE') badgeClass += 'MAINTENANCE';
+                else if (data.status === 'SCHEDULED') badgeClass += 'UNKNOWN';
+                else if (data.status === 'COMPLETED') badgeClass += 'ONLINE';
+                else badgeClass += 'OFFLINE';
+                badge.className = badgeClass;
+            }
+        });
+    }
+});
+</script>
+</body>
+</html>

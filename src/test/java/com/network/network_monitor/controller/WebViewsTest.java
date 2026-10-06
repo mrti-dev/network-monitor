@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.time.LocalDateTime;
 import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -32,21 +33,34 @@ class WebViewsTest {
     @Autowired MockMvc mvc;
     @MockitoBean DeviceService devices;
     @MockitoBean AlertService alerts;
+    @MockitoBean DeviceGroupService deviceGroupService;
+    @MockitoBean DashboardService dashboardService;
     @MockitoBean AppUserDetailsService appUserDetailsService;
+
+    @BeforeEach
+    void setUp() {
+        when(dashboardService.getDashboardSummary()).thenReturn(DashboardSummaryDto.builder()
+                .totalDevices(0).onlineDevices(0).warningDevices(0).offlineDevices(0).unknownDevices(0).maintenanceDevices(0)
+                .monitoredDevices(0).totalOpenAlerts(0).triggeredAlerts(0).acknowledgedAlerts(0).resolvedAlerts(0)
+                .criticalAlerts(0).warningAlerts(0).infoAlerts(0).averageLatencyMs(0.0).reachabilityPercentage(100.0)
+                .topLatencyDevices(List.of()).topAlertDevices(List.of()).recentAlerts(List.of())
+                .build());
+        when(deviceGroupService.getAllGroups()).thenReturn(List.of());
+    }
 
     @ParameterizedTest
     @CsvSource({"-1,0,0,1", "0,101,0,100", "99,2,2,2"})
     @WithMockUser(roles = "VIEWER")
     void paginationNormalizesBoundsAndKeepsSize(int page, int size, int expectedPage, int expectedSize) throws Exception {
-        when(devices.getAllDevices(any())).thenAnswer(invocation -> {
-            Pageable request = invocation.getArgument(0);
+        when(devices.searchDevices(any(), any())).thenAnswer(invocation -> {
+            Pageable request = invocation.getArgument(1);
             var content = request.getOffset() >= 5 ? List.<DeviceResponseDto>of() :
                     java.util.stream.IntStream.range(0, (int) Math.min(request.getPageSize(), 5 - request.getOffset()))
                             .mapToObj(i -> DeviceResponseDto.builder().id((long) i).name("test").isMonitored(true).build()).toList();
             return new PageImpl<>(content, request, 5);
         });
-        when(alerts.getAllAlerts(any())).thenAnswer(invocation -> {
-            Pageable request = invocation.getArgument(0);
+        when(alerts.searchAlerts(any(), any())).thenAnswer(invocation -> {
+            Pageable request = invocation.getArgument(1);
             var content = request.getOffset() >= 5 ? List.<AlertDto>of() :
                     java.util.stream.IntStream.range(0, (int) Math.min(request.getPageSize(), 5 - request.getOffset()))
                             .mapToObj(i -> AlertDto.builder().id((long) i).deviceId(1L).isDeviceDeleted(true).deviceName("deleted").build()).toList();
@@ -59,6 +73,8 @@ class WebViewsTest {
             assertThat(actual.getNumber()).isEqualTo(expectedPage);
             assertThat(actual.getSize()).isEqualTo(expectedSize);
             String html = result.getResponse().getContentAsString();
+            assertThat(html).contains("notification-bell", "href=\"/notifications\"");
+            assertThat(html).doesNotContain("Kênh thông báo</a>");
             assertThat(html).doesNotContain("page=-1", "page=99");
             if (actual.getTotalPages() > 1) assertThat(html).contains("size=" + expectedSize);
             if (path.equals("alerts")) assertThat(html).doesNotContain("/devices/metrics/");
@@ -68,8 +84,8 @@ class WebViewsTest {
     @Test
     @WithMockUser(roles = "VIEWER")
     void emptyPageShowsZeroRangeAndResetsPage() throws Exception {
-        when(devices.getAllDevices(any())).thenAnswer(i -> Page.empty(i.getArgument(0)));
-        when(alerts.getAllAlerts(any())).thenAnswer(i -> Page.empty(i.getArgument(0)));
+        when(devices.searchDevices(any(), any())).thenAnswer(i -> Page.empty(i.getArgument(1)));
+        when(alerts.searchAlerts(any(), any())).thenAnswer(i -> Page.empty(i.getArgument(1)));
         for (String path : List.of("devices", "alerts")) {
             var result = mvc.perform(get("/" + path).param("page", "50"))
                     .andExpect(status().isOk()).andReturn();
@@ -91,6 +107,9 @@ class WebViewsTest {
         mvc.perform(get("/devices/metrics/1")).andExpect(status().isOk())
                 .andExpect(model().attribute("metrics", List.of(oldest, newest)))
                 .andExpect(content().string(containsString("y: " + threshold)))
+                .andExpect(content().string(containsString("id=\"metric-range\"")))
+                .andExpect(content().string(containsString("chart-skeleton")))
+                .andExpect(content().string(containsString("table-skeleton")))
                 .andExpect(content().string(containsString("m.isReachable ? m.latencyMs : null")))
                 .andExpect(content().string(containsString("Thất bại (Timeout)")));
     }

@@ -28,6 +28,7 @@ import org.springframework.stereotype.Service;
 
 import com.network.network_monitor.config.DiscoveryLimits;
 import com.network.network_monitor.config.MonitoringDefaults;
+import com.network.network_monitor.discovery.MacOuiDeviceTypeResolver;
 import com.network.network_monitor.dto.DiscoveryOutcome;
 import com.network.network_monitor.dto.ScanRequestDto;
 import com.network.network_monitor.dto.ScanResponseDto;
@@ -48,6 +49,7 @@ public class DiscoveryServiceImpl implements DiscoveryService {
 	private final DiscoveryTransactionService transactionService;
 	private final MonitoringDefaults defaults;
 	private final DiscoveryLimits limits;
+	private final MacOuiDeviceTypeResolver deviceTypeResolver;
 
 	// -------------------------------------------------------------------
 	// Public API
@@ -218,7 +220,12 @@ public class DiscoveryServiceImpl implements DiscoveryService {
 
 			long latency = System.currentTimeMillis() - start;
 			String mac = getMacAddress(ip);
-			return ScanResponseDto.DiscoveredDevice.builder().ipAddress(ip).macAddress(mac).latencyMs(latency).build();
+			return ScanResponseDto.DiscoveredDevice.builder()
+					.ipAddress(ip)
+					.macAddress(mac)
+					.deviceType(deviceTypeResolver.resolve(mac).orElse(null))
+					.latencyMs(latency)
+					.build();
 		} catch (Exception e) {
 			log.debug("probe({}): {}", ip, e.getMessage());
 			return null;
@@ -251,6 +258,17 @@ public class DiscoveryServiceImpl implements DiscoveryService {
 	 * Hủy process nếu vượt timeout.
 	 */
 	private String getMacAddress(String ip) {
+		try {
+			NetworkInterface networkInterface = NetworkInterface.getByInetAddress(InetAddress.getByName(ip));
+			if (networkInterface != null) {
+				byte[] mac = networkInterface.getHardwareAddress();
+				if (mac != null)
+					return formatMac(mac);
+			}
+		} catch (Exception e) {
+			log.debug("getLocalMacAddress({}): {}", ip, e.getMessage());
+		}
+
 		// Validate ip trước khi đưa vào ProcessBuilder (đã được validate ở
 		// buildHostList)
 		ProcessBuilder pb;
@@ -288,6 +306,16 @@ public class DiscoveryServiceImpl implements DiscoveryService {
 			}
 		}
 		return null;
+	}
+
+	private String formatMac(byte[] mac) {
+		StringBuilder value = new StringBuilder(17);
+		for (byte octet : mac) {
+			if (!value.isEmpty())
+				value.append(':');
+			value.append(String.format("%02X", octet & 0xFF));
+		}
+		return value.toString();
 	}
 
 	// -------------------------------------------------------------------

@@ -42,7 +42,8 @@ import lombok.Setter;
         @Index(name = "idx_alert_device_status", columnList = "device_id, status"),
         @Index(name = "idx_alert_triggered", columnList = "triggered_at"),
         @Index(name = "idx_alert_severity", columnList = "severity"),
-        @Index(name = "idx_alert_type", columnList = "alert_type")
+        @Index(name = "idx_alert_type", columnList = "alert_type"),
+        @Index(name = "idx_alert_device_port_status", columnList = "device_id, alert_type, port, status")
 })
 public class Alert {
 
@@ -58,12 +59,15 @@ public class Alert {
     @JoinColumn(name = "acknowledged_by")
     private User acknowledgedBy;
 
+    @Column(name = "port")
+    private Integer port;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "alert_type", nullable = false, length = 30)
     private AlertType alertType;
 
     @Lob
-    @Column(name = "message", nullable = false)
+    @Column(name = "message", nullable = false, columnDefinition = "TEXT")
     private String message;
 
     @Enumerated(EnumType.STRING)
@@ -77,6 +81,9 @@ public class Alert {
 
     @Column(name = "triggered_at", nullable = false, updatable = false)
     private LocalDateTime triggeredAt;
+
+    @Column(name = "acknowledged_at")
+    private LocalDateTime acknowledgedAt;
 
     @Column(name = "resolved_at")
     private LocalDateTime resolvedAt;

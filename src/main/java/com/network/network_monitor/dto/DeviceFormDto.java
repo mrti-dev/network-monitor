@@ -32,6 +32,8 @@ public class DeviceFormDto {
 
     private String location;
 
+    private Long groupId;
+
     @Positive(message = "Chu kỳ đo phải lớn hơn 0")
     @Max(value = 86400, message = "Chu kỳ đo tối đa là 86400 giây")
     private Integer pingInterval;

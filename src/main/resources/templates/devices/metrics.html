@@ -1,4 +1,275 @@
-<!DOCTYPE html><html lang="vi" xmlns:th="http://www.thymeleaf.org"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NDMMS · Metrics</title><link rel="stylesheet" th:href="@{/css/ndmms.css}"><script th:src="@{/dist/js/apexcharts.min.js}" defer></script></head><body><div class="app-shell"><aside th:replace="~{fragments/shell :: sidebar('devices')}"></aside><main class="workspace"><header th:replace="~{fragments/shell :: top('MONITORING / DEVICE HEALTH','Giám sát sức khỏe thiết bị')}"></header>
-<section class="grid kpi-grid"><article class="panel kpi"><span class="label">Thiết bị</span><strong style="font-size:19px" th:text="${device.name}"></strong><small th:text="${device.ipAddress}"></small></article><article class="panel kpi"><span class="label">Trạng thái</span><strong style="font-size:21px" th:text="${#lists.isEmpty(metrics) ? 'CHƯA CÓ DỮ LIỆU' : (metrics[metrics.size()-1].isReachable ? 'ONLINE' : 'OFFLINE')}"></strong><small>ICMP health check</small></article><article class="panel kpi"><span class="label">Ngưỡng độ trễ</span><strong th:text="${latencyThreshold + ' ms'}"></strong><small>Thiết lập cảnh báo</small></article><article class="panel kpi"><span class="label">Số mẫu</span><strong th:text="${#lists.size(metrics)}"></strong><small>Bản ghi gần đây</small></article></section>
-<section class="panel"><div class="panel-title"><h2>Phân tích hiệu năng thời gian thực</h2><small>LATENCY / REACHABILITY</small></div><div id="metricChart" style="height:320px"></div></section><section class="panel" style="margin-top:18px"><div class="panel-title"><h2>Lịch sử kiểm tra kết nối</h2><a class="btn" th:href="@{/inventory}">Quay lại danh sách</a></div><div class="table-wrap"><table class="data-table"><thead><tr><th>Thời gian</th><th>Trạng thái</th><th>Latency</th><th>Packet Loss</th></tr></thead><tbody><tr th:each="m : ${metrics}"><td class="mono muted" th:text="${#temporals.format(m.recordedAt,'dd/MM/yyyy HH:mm:ss')}"></td><td><span class="badge" th:classappend="${m.isReachable ? 'ONLINE' : 'OFFLINE'}" th:text="${m.isReachable ? 'ONLINE' : 'Thất bại (Timeout)'}"></span></td><td class="mono" th:text="${m.latencyMs != null ? m.latencyMs + ' ms' : '-'}"></td><td class="mono" th:text="${m.packetLoss != null ? m.packetLoss + '%' : '-'}"></td></tr><tr th:if="${#lists.isEmpty(metrics)}"><td colspan="4"><div class="empty">Chưa có dữ liệu giám sát.</div></td></tr></tbody></table></div></section><footer th:replace="~{fragments/shell :: footer}"></footer></main></div>
-<script th:inline="javascript">document.addEventListener('DOMContentLoaded',()=>{const ms=/*[[${metrics}]]*/[];const chart=new ApexCharts(document.querySelector('#metricChart'),{chart:{type:'line',height:320,background:'transparent',toolbar:{show:false}},theme:{mode:'dark'},series:[{name:'Latency (ms)',data:ms.map(m=>m.isReachable ? m.latencyMs : null)}],xaxis:{categories:ms.map(m=>new Date(m.recordedAt).toLocaleTimeString('vi-VN'))},stroke:{curve:'straight',width:2},colors:['#27d8cb'],grid:{borderColor:'#17363d'},annotations:{yaxis:[{y: /*[[${latencyThreshold}]]*/ 150,borderColor:'#ff5268',label:{text:'Ngưỡng'}}]}});chart.render()});</script></body></html>
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>NDMMS · Metrics</title>
+  <link rel="stylesheet" th:href="@{/css/ndmms.css}">
+  <script th:src="@{/dist/js/apexcharts.min.js}" defer></script>
+  <script th:src="@{/dist/js/sockjs.min.js}" defer></script>
+  <script th:src="@{/dist/js/stomp.min.js}" defer></script>
+  <script th:src="@{/js/websocket-client.js}" defer></script>
+</head>
+<body>
+<div class="app-shell">
+  <aside th:replace="~{fragments/shell :: sidebar('devices')}"></aside>
+  <main class="workspace">
+    <header th:replace="~{fragments/shell :: top('MONITORING / DEVICE HEALTH','Giám sát sức khỏe thiết bị')}"></header>
+
+    <section class="grid kpi-grid">
+      <article class="panel kpi">
+        <span class="label">Thiết bị</span>
+        <strong style="font-size:19px" th:text="${device.name}"></strong>
+        <small th:text="${device.ipAddress}"></small>
+      </article>
+      <article class="panel kpi">
+        <span class="label">Trạng thái</span>
+        <strong id="kpi-status" style="font-size:21px"
+                th:text="${#lists.isEmpty(metrics) ? 'CHƯA CÓ DỮ LIỆU' : (metrics[metrics.size()-1].isReachable ? 'ONLINE' : 'OFFLINE')}"></strong>
+        <small>ICMP health check</small>
+      </article>
+      <article class="panel kpi">
+        <span class="label">Ngưỡng độ trễ</span>
+        <strong th:text="${latencyThreshold + ' ms'}"></strong>
+        <small>Thiết lập cảnh báo</small>
+      </article>
+      <article class="panel kpi">
+        <span class="label">Số mẫu</span>
+        <strong id="kpi-samples" th:text="${#lists.size(metrics)}"></strong>
+        <small>Bản ghi gần đây</small>
+      </article>
+    </section>
+
+    <section class="panel">
+      <div class="panel-title">
+        <h2>Phân tích hiệu năng thời gian thực</h2>
+        <label class="range-control">Khoảng thời gian
+          <select id="metric-range" class="form-select">
+            <option value="15m">15 phút</option>
+            <option value="1h" selected>1 giờ</option>
+            <option value="6h">6 giờ</option>
+            <option value="24h">24 giờ</option>
+            <option value="7d">7 ngày</option>
+          </select>
+        </label>
+      </div>
+      <div id="chart-loading-region" class="loading-region is-loading" aria-busy="true">
+        <div id="metricChart" style="height:320px"></div>
+        <div class="loading-overlay" role="status" aria-live="polite">
+          <div class="chart-skeleton"><span></span><span></span><span></span><span></span><span></span></div>
+          <small>Đang tải biểu đồ...</small>
+        </div>
+      </div>
+    </section>
+
+    <section id="metrics-loading-region" class="panel loading-region" style="margin-top:18px" aria-busy="false">
+      <div class="panel-title">
+        <h2>Lịch sử kiểm tra kết nối</h2>
+        <a class="btn" th:href="@{/inventory}">Quay lại danh sách</a>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Thời gian</th>
+              <th>Trạng thái</th>
+              <th>Latency</th>
+              <th>Packet Loss</th>
+            </tr>
+          </thead>
+          <tbody id="metrics-table-body">
+            <tr th:each="m : ${metrics}">
+              <td class="mono muted" th:text="${#temporals.format(m.recordedAt,'dd/MM/yyyy HH:mm:ss')}"></td>
+              <td>
+                <span class="badge" th:classappend="${m.isReachable ? 'ONLINE' : 'OFFLINE'}"
+                      th:text="${m.isReachable ? 'ONLINE' : 'Thất bại (Timeout)'}"></span>
+              </td>
+              <td class="mono" th:text="${m.latencyMs != null ? m.latencyMs + ' ms' : '-'}"></td>
+              <td class="mono" th:text="${m.packetLoss != null ? m.packetLoss + '%' : '-'}"></td>
+            </tr>
+            <tr th:if="${#lists.isEmpty(metrics)}" id="empty-metrics-row">
+              <td colspan="4"><div class="empty">Chưa có dữ liệu giám sát.</div></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="loading-overlay" role="status" aria-live="polite">
+        <div class="table-skeleton"><span></span><span></span><span></span><span></span></div>
+        <small>Đang tải dữ liệu...</small>
+      </div>
+    </section>
+
+    <footer th:replace="~{fragments/shell :: footer}"></footer>
+  </main>
+</div>
+
+<script th:inline="javascript">
+document.addEventListener('DOMContentLoaded', () => {
+    const currentDeviceId = /*[[${device.id}]]*/ 0;
+    const ms = /*[[${metrics}]]*/ [];
+    const MAX_POINTS = 100;
+
+    let chartCategories = ms.map(m => new Date(m.recordedAt).toLocaleTimeString('vi-VN'));
+    let latencySeries = ms.map(m => m.isReachable ? m.latencyMs : null);
+    let packetLossSeries = ms.map(m => m.packetLoss != null ? m.packetLoss : (m.isReachable ? 0 : 100));
+    const seenMetricIds = new Set();
+
+    const chart = new ApexCharts(document.querySelector('#metricChart'), {
+        chart: {
+            type: 'line',
+            height: 320,
+            background: 'transparent',
+            toolbar: { show: false },
+            animations: { enabled: true, easing: 'linear', dynamicAnimation: { speed: 300 } }
+        },
+        theme: { mode: 'dark' },
+        series: [
+            { name: 'Latency (ms)', data: latencySeries },
+            { name: 'Packet Loss (%)', data: packetLossSeries }
+        ],
+        xaxis: { categories: chartCategories },
+        stroke: { curve: 'straight', width: 2 },
+        colors: ['#27d8cb', '#ff9800'],
+        grid: { borderColor: '#17363d' },
+        annotations: {
+            yaxis: [{
+                y: /*[[${latencyThreshold}]]*/ 150,
+                borderColor: '#ff5268',
+                label: { text: 'Ngưỡng' }
+            }]
+        }
+    });
+    chart.render().finally(() => setLoading(false, true));
+
+    function setLoading(loading, chartOnly = false) {
+        const chartRegion = document.getElementById('chart-loading-region');
+        const metricsRegion = document.getElementById('metrics-loading-region');
+        const rangeSelect = document.getElementById('metric-range');
+        chartRegion?.classList.toggle('is-loading', loading);
+        chartRegion?.setAttribute('aria-busy', String(loading));
+        if (!chartOnly) {
+            metricsRegion?.classList.toggle('is-loading', loading);
+            metricsRegion?.setAttribute('aria-busy', String(loading));
+            if (rangeSelect) rangeSelect.disabled = loading;
+        }
+    }
+
+    function renderData() {
+        chart.updateOptions({
+            xaxis: { categories: chartCategories },
+            series: [
+                { name: 'Latency (ms)', data: latencySeries },
+                { name: 'Packet Loss (%)', data: packetLossSeries }
+            ]
+        });
+        const samplesEl = document.getElementById('kpi-samples');
+        if (samplesEl) samplesEl.textContent = chartCategories.length;
+    }
+
+    function appendMetric(metric) {
+        if (!metric || metric.deviceId !== currentDeviceId) return;
+
+        const timeStr = new Date(metric.recordedAt).toLocaleTimeString('vi-VN');
+        const latVal = metric.reachable ? metric.latencyMs : null;
+        const lossVal = metric.packetLoss != null ? metric.packetLoss : (metric.reachable ? 0 : 100);
+
+        chartCategories.push(timeStr);
+        latencySeries.push(latVal);
+        packetLossSeries.push(lossVal);
+
+        if (chartCategories.length > MAX_POINTS) {
+            chartCategories.shift();
+            latencySeries.shift();
+            packetLossSeries.shift();
+        }
+
+        renderData();
+
+        const kpiStatus = document.getElementById('kpi-status');
+        if (kpiStatus) {
+            kpiStatus.textContent = metric.reachable ? 'ONLINE' : 'OFFLINE';
+        }
+
+        const tbody = document.getElementById('metrics-table-body');
+        if (tbody) {
+            const emptyRow = document.getElementById('empty-metrics-row');
+            if (emptyRow) emptyRow.remove();
+
+            const row = document.createElement('tr');
+            const dateFull = new Date(metric.recordedAt).toLocaleString('vi-VN');
+            row.innerHTML = `
+                <td class="mono muted">${dateFull}</td>
+                <td><span class="badge ${metric.reachable ? 'ONLINE' : 'OFFLINE'}">${metric.reachable ? 'ONLINE' : 'Thất bại (Timeout)'}</span></td>
+                <td class="mono">${metric.latencyMs != null ? metric.latencyMs.toFixed(1) + ' ms' : '-'}</td>
+                <td class="mono">${metric.packetLoss != null ? metric.packetLoss.toFixed(1) + '%' : '-'}</td>
+            `;
+            tbody.insertBefore(row, tbody.firstChild);
+
+            while (tbody.children.length > 15) {
+                tbody.removeChild(tbody.lastChild);
+            }
+        }
+    }
+
+    function renderTable(data) {
+        const tbody = document.getElementById('metrics-table-body');
+        if (!tbody) return;
+        tbody.replaceChildren();
+        if (data.length === 0) {
+            const row = document.createElement('tr');
+            row.id = 'empty-metrics-row';
+            row.innerHTML = '<td colspan="4"><div class="empty">Chưa có dữ liệu giám sát.</div></td>';
+            tbody.appendChild(row);
+            return;
+        }
+        [...data].reverse().slice(0, 15).forEach(metric => {
+            const row = document.createElement('tr');
+            const reachable = Boolean(metric.isReachable);
+            row.innerHTML = `
+                <td class="mono muted">${new Date(metric.recordedAt).toLocaleString('vi-VN')}</td>
+                <td><span class="badge ${reachable ? 'ONLINE' : 'OFFLINE'}">${reachable ? 'ONLINE' : 'Thất bại (Timeout)'}</span></td>
+                <td class="mono">${metric.latencyMs != null ? Number(metric.latencyMs).toFixed(1) + ' ms' : '-'}</td>
+                <td class="mono">${metric.packetLoss != null ? Number(metric.packetLoss).toFixed(1) + '%' : '-'}</td>`;
+            tbody.appendChild(row);
+        });
+    }
+
+    function loadSnapshot() {
+        const range = document.getElementById('metric-range')?.value || '1h';
+        setLoading(true);
+        fetch('/api/devices/' + currentDeviceId + '/metrics?range=' + encodeURIComponent(range) + '&limit=' + MAX_POINTS)
+            .then(res => {
+                if (!res.ok) throw new Error('Không thể tải dữ liệu');
+                return res.json();
+            })
+            .then(data => {
+                if (!Array.isArray(data)) return;
+                chartCategories = data.map(m => new Date(m.recordedAt).toLocaleTimeString('vi-VN'));
+                latencySeries = data.map(m => m.isReachable ? m.latencyMs : null);
+                packetLossSeries = data.map(m => m.packetLoss != null ? m.packetLoss : (m.isReachable ? 0 : 100));
+                seenMetricIds.clear();
+                renderData();
+                renderTable(data);
+            })
+            .catch(() => {})
+            .finally(() => setLoading(false));
+    }
+
+    document.getElementById('metric-range')?.addEventListener('change', loadSnapshot);
+
+    if (window.ndmmsWs) {
+        window.ndmmsWs.subscribe('/topic/devices/' + currentDeviceId + '/metrics', (metric) => {
+            if (!metric || metric.deviceId !== currentDeviceId) return;
+            if (metric.metricId && seenMetricIds.has(metric.metricId)) return;
+            if (metric.metricId) seenMetricIds.add(metric.metricId);
+            appendMetric(metric);
+        });
+
+        window.ndmmsWs.onReconnect(() => {
+            loadSnapshot();
+        });
+    }
+});
+</script>
+</body>
+</html>

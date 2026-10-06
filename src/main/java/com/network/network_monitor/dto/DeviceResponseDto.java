@@ -1,7 +1,6 @@
 package com.network.network_monitor.dto;
 
 import java.time.LocalDateTime;
-
 import com.network.network_monitor.enums.DeviceStatus;
 import com.network.network_monitor.enums.DeviceType;
 import lombok.AllArgsConstructor;
@@ -22,5 +21,11 @@ public class DeviceResponseDto {
     private DeviceStatus status;
     private String location;
     private Boolean isMonitored;
+    private Long groupId;
+    private String groupName;
+    private Integer pingInterval;
+    private Integer timeoutMs;
+    private Double latencyThreshold;
+    private com.network.network_monitor.enums.MaintenanceSource maintenanceSource;
     private LocalDateTime updatedAt;
 }

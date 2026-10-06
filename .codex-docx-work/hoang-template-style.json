@@ -1,0 +1,85 @@
+{
+  "input": "D:\\web_nc\\BTL\\Tr\u1ea7n V\u0103n Ho\u00e0ng _23A1001D0156.docx",
+  "fonts_by_char_count": {
+    "Times New Roman": 5273
+  },
+  "direct_run_formatting_runs": 190,
+  "direct_paragraph_formatting_paragraphs": 74,
+  "heading_like_paragraphs_not_heading_style": [
+    {
+      "para_index": 1,
+      "text": "          THI\u1ebeT K\u1ebe H\u1ec6 TH\u1ed0NG C\u00c1 NH\u00c2N ",
+      "style": "normal"
+    },
+    {
+      "para_index": 11,
+      "text": "Use Case 1: UC-CTR-05 - Gia h\u1ea1n h\u1ee3p \u0111\u1ed3ng lao \u0111\u1ed9ng",
+      "style": "normal"
+    },
+    {
+      "para_index": 27,
+      "text": "Use Case 2: UC-EVA-03 - Tr\u01b0\u1edfng ph\u00f2ng ch\u1ea5m \u0111i\u1ec3m v\u00e0 x\u1ebfp lo\u1ea1i c\u1ea5p d\u01b0\u1edbi",
+      "style": "normal"
+    }
+  ],
+  "examples": {
+    "direct_run_formatting": [
+      {
+        "para_index": 1,
+        "run_text": "          THI\u1ebeT K\u1ebe H\u1ec6 TH\u1ed0NG C\u00c1 NH\u00c2N ",
+        "style": "normal"
+      },
+      {
+        "para_index": 2,
+        "run_text": "H\u1ecd v\u00e0 t\u00ean : Tr\u1ea7n V\u0103n Ho\u00e0ng ",
+        "style": "normal"
+      },
+      {
+        "para_index": 3,
+        "run_text": "MSV : 23A1001D0156",
+        "style": "normal"
+      },
+      {
+        "para_index": 6,
+        "run_text": "PH\u1ea6N 1: THI\u1ebeT K\u1ebe K\u1ef8 THU\u1eacT T\u1eea SRS NH\u00d3M TH\u1ed0NG NH\u1ea4T",
+        "style": "Heading 1"
+      },
+      {
+        "para_index": 7,
+        "run_text": "1.1. X\u00e1c \u0111\u1ecbnh module \u0111\u01b0\u1ee3c ph\u00e2n c\u00f4ng",
+        "style": "Heading 2"
+      }
+    ],
+    "direct_paragraph_formatting": [
+      {
+        "para_index": 6,
+        "text": "PH\u1ea6N 1: THI\u1ebeT K\u1ebe K\u1ef8 THU\u1eacT T\u1eea SRS NH\u00d3M TH\u1ed0NG NH\u1ea4T",
+        "style": "Heading 1"
+      },
+      {
+        "para_index": 7,
+        "text": "1.1. X\u00e1c \u0111\u1ecbnh module \u0111\u01b0\u1ee3c ph\u00e2n c\u00f4ng",
+        "style": "Heading 2"
+      },
+      {
+        "para_index": 8,
+        "text": "T\u00ean Module: M3 \u2013 Qu\u1ea3n l\u00fd H\u1ee3p \u0111\u1ed3ng lao \u0111\u1ed9ng v\u00e0 \u0110\u00e1nh gi\u00e1 nh\u00e2n s\u1ef1 \u0111\u1ecbnh k\u1ef3.",
+        "style": "normal"
+      },
+      {
+        "para_index": 9,
+        "text": "Ph\u1ea1m vi nghi\u1ec7p v\u1ee5: L\u1eadp, gia h\u1ea1n, thanh l\u00fd h\u1ee3p \u0111\u1ed3ng (P01, P03, P05); c\u1ea3nh b\u00e1o h\u1ee3p \u0111\u1ed3ng s\u1eafp h\u1ebft h\u1ea1n d\u01b0\u1edbi 30 ng\u00e0y; t\u1ed5 ch\u1ee9c ",
+        "style": "normal"
+      },
+      {
+        "para_index": 10,
+        "text": "1.2. \u0110\u1eb7c t\u1ea3 chi ti\u1ebft 2 Use Case ch\u00ednh",
+        "style": "Heading 2"
+      }
+    ]
+  },
+  "notes": [
+    "Direct formatting is not always wrong, but it often causes inconsistent output when templates change.",
+    "Heading-like paragraphs not using Heading styles can break TOC and accessibility."
+  ]
+}

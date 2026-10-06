@@ -55,7 +55,7 @@ public class DeviceLog {
     private DeviceLogAction action;
 
     @Lob
-    @Column(name = "description")
+    @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
     @Column(name = "performed_by")

@@ -12,7 +12,7 @@ import com.network.network_monitor.dto.AlertProjection;
 import com.network.network_monitor.entity.Alert;
 import com.network.network_monitor.entity.Device;
 import com.network.network_monitor.enums.AlertType;
-import com.network.network_monitor.notification.AlertCreated;
+import com.network.network_monitor.notification.AlertEvent;
 import com.network.network_monitor.repository.AlertRepository;
 
 class AlertMappingTest {
@@ -25,10 +25,12 @@ class AlertMappingTest {
             alert.setId(42L);
             return alert;
         });
-        new AlertServiceImpl(repository, publisher).triggerAlert(Device.builder().id(1L).build(), "offline", AlertType.OFFLINE);
-        var event = ArgumentCaptor.forClass(AlertCreated.class);
+        new AlertServiceImpl(repository, publisher).triggerAlert(Device.builder().id(1L).name("Core").build(), "offline", AlertType.OFFLINE);
+        var event = ArgumentCaptor.forClass(AlertEvent.class);
         verify(publisher).publishEvent(event.capture());
-        assertThat(event.getValue()).isEqualTo(new AlertCreated(42L, "offline"));
+        assertThat(event.getValue().alertId()).isEqualTo(42L);
+        assertThat(event.getValue().action()).isEqualTo("TRIGGERED");
+        assertThat(event.getValue().message()).isEqualTo("offline");
     }
 
     @Test

@@ -1,13 +1,16 @@
 package com.network.network_monitor.service.impl;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.network.network_monitor.entity.Device;
 import com.network.network_monitor.enums.AlertType;
 import com.network.network_monitor.enums.DeviceStatus;
+import com.network.network_monitor.notification.DeviceStatusChangedEvent;
 import com.network.network_monitor.repository.DeviceRepository;
 import com.network.network_monitor.service.AlertService;
 import com.network.network_monitor.service.DeviceHealthService;
@@ -22,6 +25,7 @@ public class DeviceHealthServiceImpl implements DeviceHealthService {
 
     private final DeviceRepository deviceRepository;
     private final AlertService alertService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     @Transactional
@@ -31,11 +35,26 @@ public class DeviceHealthServiceImpl implements DeviceHealthService {
             return;
         }
 
-        boolean statusChanged = (device.getStatus() != targetStatus);
+        DeviceStatus previousStatus = device.getStatus();
+        boolean statusChanged = (previousStatus != targetStatus);
 
         if (statusChanged) {
             device.setStatus(targetStatus);
             deviceRepository.save(device);
+
+            String reason = (triggerMessage != null && !triggerMessage.isBlank())
+                    ? triggerMessage
+                    : (targetStatus == DeviceStatus.ONLINE ? "Thiết bị phản hồi ổn định" : ("Trạng thái thay đổi thành " + targetStatus));
+
+            eventPublisher.publishEvent(new DeviceStatusChangedEvent(
+                    device.getId(),
+                    device.getName(),
+                    device.getIpAddress(),
+                    previousStatus,
+                    targetStatus,
+                    reason,
+                    LocalDateTime.now()
+            ));
         }
 
         if (alertsToResolve != null && !alertsToResolve.isEmpty()) {

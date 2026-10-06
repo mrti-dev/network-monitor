@@ -1,5 +1,122 @@
-<!DOCTYPE html><html lang="vi" xmlns:th="http://www.thymeleaf.org"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NDMMS · Cảnh báo</title><link rel="stylesheet" th:href="@{/css/ndmms.css}"><script th:src="@{/js/ndmms.js}" defer></script></head><body><div class="app-shell"><aside th:replace="~{fragments/shell :: sidebar('alerts')}"></aside><main class="workspace"><header th:replace="~{fragments/shell :: top('GIÁM SÁT CẢNH BÁO / ALERTS','Trung tâm quản lý sự cố & cảnh báo')}"></header>
-<section class="grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:18px"><article class="panel kpi danger"><span class="label">Nghiêm trọng</span><strong th:text="${#lists.size(alertPage.content.?[severity != null and severity.name() == 'CRITICAL'])}">0</strong><small>sự cố</small></article><article class="panel kpi"><span class="label">Cảnh báo</span><strong class="WARNING" th:text="${#lists.size(alertPage.content.?[severity != null and severity.name() == 'WARNING'])}">0</strong><small>sự cố</small></article><article class="panel kpi"><span class="label">Thông tin</span><strong class="INFO" th:text="${#lists.size(alertPage.content.?[severity != null and severity.name() == 'INFO'])}">0</strong><small>sự cố</small></article></section>
-<section class="panel"><div class="panel-title"><div class="toolbar"><input class="form-control" placeholder="Tìm thiết bị, nội dung..." data-filter-table="#alertsTable"><select class="form-select"><option>Mức độ: Tất cả</option><option>CRITICAL</option><option>WARNING</option><option>INFO</option></select></div><span class="muted" th:text="${alertPage.totalElements + ' bản ghi'}"></span></div><div class="table-wrap"><table class="data-table" id="alertsTable"><thead><tr><th>Mức độ</th><th>Thiết bị / IP</th><th>Nội dung cảnh báo</th><th>Thời gian</th><th>Trạng thái</th></tr></thead><tbody>
-<tr th:each="a : ${alertPage.content}"><td><span class="badge" th:classappend="${a.severity}" th:text="${a.severity}"></span></td><td class="device-name"><strong th:text="${a.deviceName}"></strong><small th:text="${a.isDeviceDeleted ? 'Thiết bị đã xóa' : 'Đang quản lý'}"></small></td><td th:text="${a.message}"></td><td class="mono muted" th:text="${#temporals.format(a.triggeredAt,'dd/MM/yyyy HH:mm:ss')}"></td><td><span class="badge" th:classappend="${a.status}" th:text="${a.status}"></span></td></tr><tr th:if="${#lists.isEmpty(alertPage.content)}"><td colspan="5"><div class="empty">Chưa có cảnh báo nào trong hệ thống.</div></td></tr>
-</tbody></table></div><div class="pagination-bar"><span>Hiển thị <span th:text="${alertPage.totalElements == 0 ? 0 : alertPage.number * alertPage.size + 1}">0</span> đến <span th:text="${alertPage.totalElements == 0 ? 0 : alertPage.number * alertPage.size + alertPage.numberOfElements}">0</span> của <span th:text="${alertPage.totalElements}">0</span> mục</span><nav class="pagination" th:if="${alertPage.totalPages > 1}"><a class="btn" th:if="${alertPage.hasPrevious()}" th:href="@{/alerts(page=${alertPage.number - 1},size=${alertPage.size})}">Trước</a><span th:text="${alertPage.number + 1} + ' / ' + ${alertPage.totalPages}"></span><a class="btn" th:if="${alertPage.hasNext()}" th:href="@{/alerts(page=${alertPage.number + 1},size=${alertPage.size})}">Sau</a></nav></div></section><footer th:replace="~{fragments/shell :: footer}"></footer></main></div></body></html>
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security6">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>NDMMS · Cảnh báo</title>
+  <link rel="stylesheet" th:href="@{/css/ndmms.css}">
+  <script th:src="@{/js/ndmms.js}" defer></script>
+</head>
+<body>
+<div class="app-shell">
+  <aside th:replace="~{fragments/shell :: sidebar('alerts')}"></aside>
+  <main class="workspace">
+    <header th:replace="~{fragments/shell :: top('GIÁM SÁT CẢNH BÁO / ALERTS','Trung tâm quản lý sự cố & cảnh báo')}"></header>
+
+    <div class="flash" th:if="${successMessage}" th:text="${successMessage}"></div>
+    <div class="flash error" th:if="${errorMessage}" th:text="${errorMessage}"></div>
+
+    <section class="grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:18px">
+      <article class="panel kpi danger">
+        <span class="label">Nghiêm trọng</span>
+        <strong th:text="${#lists.size(alertPage.content.?[severity != null and severity.name() == 'CRITICAL'])}">0</strong>
+        <small>sự cố trên trang này</small>
+      </article>
+      <article class="panel kpi">
+        <span class="label">Cảnh báo</span>
+        <strong class="WARNING" th:text="${#lists.size(alertPage.content.?[severity != null and severity.name() == 'WARNING'])}">0</strong>
+        <small>sự cố trên trang này</small>
+      </article>
+      <article class="panel kpi">
+        <span class="label">Thông tin</span>
+        <strong class="INFO" th:text="${#lists.size(alertPage.content.?[severity != null and severity.name() == 'INFO'])}">0</strong>
+        <small>sự cố trên trang này</small>
+      </article>
+    </section>
+
+    <section class="panel">
+      <div class="panel-title">
+        <form class="toolbar" method="get" th:action="@{/alerts}" style="flex-wrap:wrap;gap:10px;width:100%">
+          <input class="form-control" style="max-width:220px" name="keyword" th:value="${filter?.keyword}" placeholder="Tìm thiết bị, IP, nội dung...">
+          <select class="form-select" style="max-width:160px" name="status">
+            <option value="">-- Tất cả trạng thái --</option>
+            <option th:each="st : ${allStatuses}" th:value="${st}" th:text="${st}" th:selected="${filter?.status == st}"></option>
+          </select>
+          <select class="form-select" style="max-width:160px" name="severity">
+            <option value="">-- Tất cả mức độ --</option>
+            <option th:each="sv : ${allSeverities}" th:value="${sv}" th:text="${sv}" th:selected="${filter?.severity == sv}"></option>
+          </select>
+          <input class="form-control mono" style="max-width:150px" type="date" name="fromDate" th:value="${filter?.fromDate}" placeholder="Từ ngày" title="Từ ngày">
+          <input class="form-control mono" style="max-width:150px" type="date" name="toDate" th:value="${filter?.toDate}" placeholder="Đến ngày" title="Đến ngày">
+          <button class="btn btn-primary" type="submit">Lọc</button>
+          <a class="btn btn-outline" th:href="@{/alerts}">Xóa bộ lọc</a>
+        </form>
+        <span class="muted" style="white-space:nowrap;margin-left:auto" th:text="${alertPage.totalElements + ' bản ghi'}"></span>
+      </div>
+
+      <div class="table-wrap">
+        <table class="data-table" id="alertsTable">
+          <thead>
+            <tr>
+              <th>Mức độ</th>
+              <th>Thiết bị / IP</th>
+              <th>Nội dung cảnh báo</th>
+              <th>Thời gian kích hoạt</th>
+              <th>Thời gian giải quyết</th>
+              <th>Trạng thái</th>
+              <th sec:authorize="hasAnyRole('ADMIN','OPERATOR')">Thao tác</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr th:each="a : ${alertPage.content}">
+              <td><span class="badge" th:classappend="${a.severity}" th:text="${a.severity}"></span></td>
+              <td class="device-name">
+                <strong th:text="${a.deviceName}"></strong>
+                <small th:text="${a.isDeviceDeleted ? 'Thiết bị đã xóa' : 'Đang quản lý'}"></small>
+              </td>
+              <td th:text="${a.message}"></td>
+              <td class="mono muted" th:text="${#temporals.format(a.triggeredAt,'dd/MM/yyyy HH:mm:ss')}"></td>
+              <td class="mono muted" th:text="${a.resolvedAt != null ? #temporals.format(a.resolvedAt,'dd/MM/yyyy HH:mm:ss') : '-'}"></td>
+              <td>
+                <span class="badge" th:classappend="${a.status}" th:text="${a.status}"></span>
+                <div th:if="${a.acknowledgedBy != null}" style="margin-top:3px;font-size:11px" class="muted">
+                  <span th:text="${'Bởi: ' + a.acknowledgedBy}"></span>
+                  <span th:if="${a.acknowledgedAt != null}" th:text="${' (' + #temporals.format(a.acknowledgedAt,'HH:mm:ss') + ')'}"></span>
+                </div>
+              </td>
+              <td sec:authorize="hasAnyRole('ADMIN','OPERATOR')">
+                <div class="toolbar" style="gap:6px">
+                  <form th:if="${a.status != null and a.status.name() == 'TRIGGERED'}" th:action="@{/alerts/{id}/acknowledge(id=${a.id})}" method="post" style="display:inline">
+                    <button class="btn btn-outline" style="min-height:30px;padding:2px 10px;font-size:12px" type="submit">Xác nhận</button>
+                  </form>
+                  <form th:if="${a.status != null and a.status.name() != 'RESOLVED'}" th:action="@{/alerts/{id}/resolve(id=${a.id})}" method="post" style="display:inline">
+                    <button class="btn btn-primary" style="min-height:30px;padding:2px 10px;font-size:12px" type="submit">Đóng</button>
+                  </form>
+                  <span class="muted" style="font-size:12px" th:if="${a.status != null and a.status.name() == 'RESOLVED'}">Đã đóng</span>
+                </div>
+              </td>
+            </tr>
+            <tr th:if="${#lists.isEmpty(alertPage.content)}">
+              <td colspan="7"><div class="empty">Không tìm thấy cảnh báo nào phù hợp.</div></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="pagination-bar">
+        <span>Hiển thị <span th:text="${alertPage.totalElements == 0 ? 0 : alertPage.number * alertPage.size + 1}">0</span> đến <span th:text="${alertPage.totalElements == 0 ? 0 : alertPage.number * alertPage.size + alertPage.numberOfElements}">0</span> của <span th:text="${alertPage.totalElements}">0</span> mục</span>
+        <nav class="pagination" th:if="${alertPage.totalPages > 1}">
+          <a class="btn" th:if="${alertPage.hasPrevious()}"
+             th:href="@{/alerts(page=${alertPage.number - 1},size=${alertPage.size},keyword=${filter?.keyword},status=${filter?.status},severity=${filter?.severity},fromDate=${filter?.fromDate},toDate=${filter?.toDate})}">Trước</a>
+          <span th:text="${alertPage.number + 1} + ' / ' + ${alertPage.totalPages}"></span>
+          <a class="btn" th:if="${alertPage.hasNext()}"
+             th:href="@{/alerts(page=${alertPage.number + 1},size=${alertPage.size},keyword=${filter?.keyword},status=${filter?.status},severity=${filter?.severity},fromDate=${filter?.fromDate},toDate=${filter?.toDate})}">Sau</a>
+        </nav>
+      </div>
+    </section>
+
+    <footer th:replace="~{fragments/shell :: footer}"></footer>
+  </main>
+</div>
+</body>
+</html>
