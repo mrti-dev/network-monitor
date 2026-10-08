@@ -12,7 +12,6 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import org.hibernate.SessionFactory;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
@@ -21,8 +20,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -39,28 +37,17 @@ import com.network.network_monitor.exception.DuplicateResourceException;
 import com.network.network_monitor.notification.NotificationDispatcher;
 import com.network.network_monitor.repository.*;
 import com.network.network_monitor.scheduler.HealthEvaluator;
-import com.network.network_monitor.service.impl.*;
+import com.network.network_monitor.service.impl.AlertServiceImpl;
+import com.network.network_monitor.service.impl.DeviceServiceImpl;
+import com.network.network_monitor.service.impl.DiscoveryTransactionService;
 
 @DataJpaTest(properties = {"spring.jpa.hibernate.ddl-auto=create-drop", "spring.jpa.properties.hibernate.generate_statistics=true", "spring.jpa.show-sql=false"})
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({DeviceServiceImpl.class, DiscoveryTransactionService.class, AlertServiceImpl.class,
         NotificationDispatcher.class, MonitoringDefaults.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
-@EnabledIfEnvironmentVariable(named = "MYSQL_TEST_URL", matches = ".+")
+@ActiveProfiles("mysql-test")
 class MySqlPersistenceTest {
-    @DynamicPropertySource
-    static void database(DynamicPropertyRegistry registry) {
-        String url = System.getenv("MYSQL_TEST_URL");
-        if (!url.matches("jdbc:mysql://[^/]+/network_monitor_test_[a-zA-Z0-9_]+\\?.*")) {
-            throw new IllegalArgumentException("Chỉ cho phép database network_monitor_test_* dành riêng cho kiểm thử");
-        }
-        registry.add("spring.datasource.url", () -> url);
-        registry.add("spring.datasource.driver-class-name", () -> "com.mysql.cj.jdbc.Driver");
-        registry.add("spring.jpa.database-platform", () -> "org.hibernate.dialect.MySQLDialect");
-        registry.add("spring.datasource.username", () -> System.getenv("MYSQL_TEST_USER"));
-        registry.add("spring.datasource.password", () -> System.getenv("MYSQL_TEST_PASSWORD"));
-    }
-
     @MockitoSpyBean DeviceRepository devices;
     @Autowired DeviceLogRepository logs;
     @Autowired MetricLogRepository metrics;
@@ -349,5 +336,40 @@ class MySqlPersistenceTest {
 
         assertThatThrownBy(() -> portRepository.saveAndFlush(p2))
                 .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void networkLinkAndStatusHistoryConstraints() {
+        Device d1 = device();
+
+        // Kiểm tra JPA entity validation: sourceDevice == targetDevice bị chặn bởi @PrePersist
+        NetworkLink selfLink = NetworkLink.builder()
+                .sourceDevice(d1)
+                .targetDevice(d1)
+                .linkType(LinkType.ETHERNET)
+                .status(LinkStatus.UP)
+                .discoverySource(LinkDiscoverySource.MANUAL)
+                .build();
+
+        assertThatThrownBy(() -> transaction(() -> entityManager.persist(selfLink)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("không được trùng nhau");
+    }
+
+    @Test
+    void parallelNetworkLinksUseDistinctInterfacePairs() {
+        Device source = device();
+        Device target = device();
+
+        transaction(() -> {
+            entityManager.persist(NetworkLink.builder().sourceDevice(source).targetDevice(target)
+                    .sourcePort("Gi0/1").targetPort("Gi0/2").build());
+            entityManager.persist(NetworkLink.builder().sourceDevice(source).targetDevice(target)
+                    .sourcePort("Gi0/3").targetPort("Gi0/4").build());
+            entityManager.flush();
+        });
+
+        assertThat(jdbc.queryForObject("select count(*) from network_links where source_device_id=? and target_device_id=?",
+                Integer.class, source.getId(), target.getId())).isEqualTo(2);
     }
 }

@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>NDMMS · Sơ đồ Topology mạng</title>
+  <link rel="stylesheet" th:href="@{/css/ndmms.css}">
+  <style>
+    .topology-container {
+      position: relative;
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      overflow: hidden;
+      margin-top: 16px;
+      height: 580px;
+    }
+    #topology-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: grab;
+    }
+    #topology-canvas:active {
+      cursor: grabbing;
+    }
+    .topology-toolbar {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      display: flex;
+      gap: 8px;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(8px);
+      padding: 6px 10px;
+      border-radius: 6px;
+      border: 1px solid #334155;
+      z-index: 10;
+    }
+    .topology-legend {
+      position: absolute;
+      bottom: 12px;
+      left: 12px;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(8px);
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1px solid #334155;
+      font-size: 11px;
+      display: flex;
+      gap: 12px;
+      color: #94a3b8;
+      z-index: 10;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+    .node-details-drawer {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      width: 300px;
+      background: rgba(15, 23, 42, 0.95);
+      backdrop-filter: blur(12px);
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 14px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+      z-index: 20;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+<div class="app-shell">
+  <aside th:replace="~{fragments/shell :: sidebar('topology')}"></aside>
+  <main class="workspace">
+    <header th:replace="~{fragments/shell :: top('TOPOLOGY / NETWORK MAP', 'Sơ đồ Topology mạng')}"></header>
+
+    <div class="flash" th:if="${successMessage}" th:text="${successMessage}"></div>
+    <div class="flash error" th:if="${errorMessage}" th:text="${errorMessage}"></div>
+
+    <!-- KPI Grid -->
+    <section class="grid kpi-grid">
+      <article class="panel kpi">
+        <span class="label">Tổng số Nodes</span>
+        <strong style="font-size:22px" th:text="${topology.totalNodes}">0</strong>
+        <small th:text="${topology.onlineNodes + ' Online · ' + topology.offlineNodes + ' Offline'}"></small>
+      </article>
+      <article class="panel kpi">
+        <span class="label">Liên kết mạng (Links)</span>
+        <strong style="font-size:22px" th:text="${topology.totalLinks}">0</strong>
+        <small th:text="${topology.upLinks + ' Hoạt động · ' + topology.downLinks + ' Gián đoạn'}"></small>
+      </article>
+      <article class="panel kpi">
+        <span class="label">Tỷ lệ kết nối khả dụng</span>
+        <strong style="font-size:22px">
+          <span th:if="${topology.totalLinks > 0}"
+                th:text="${#numbers.formatDecimal((topology.upLinks * 100.0) / topology.totalLinks, 1, 1) + '%'}">100%</span>
+          <span th:if="${topology.totalLinks == 0}">100%</span>
+        </strong>
+        <small>Dựa trên trạng thái liên kết</small>
+      </article>
+      <article class="panel kpi">
+        <span class="label">Thao tác</span>
+        <div style="display:flex;gap:6px;margin-top:6px" sec:authorize="hasAnyRole('ADMIN','OPERATOR')">
+          <form th:action="@{/topology/auto-discover}" method="post">
+            <button class="btn btn-primary" style="padding:4px 10px;font-size:12px" type="submit">Auto-Discover Links</button>
+          </form>
+          <button class="btn" style="padding:4px 10px;font-size:12px" onclick="document.getElementById('add-link-section').scrollIntoView({behavior:'smooth'})">Thêm link</button>
+        </div>
+        <small sec:authorize="hasRole('VIEWER')">Chế độ xem trực quan</small>
+      </article>
+    </section>
+
+    <!-- Interactive Topology Canvas Section -->
+    <div class="topology-container">
+      <div class="topology-toolbar">
+        <button class="btn" style="padding:2px 8px;font-size:12px" onclick="zoomIn()" title="Phóng to">+</button>
+        <button class="btn" style="padding:2px 8px;font-size:12px" onclick="zoomOut()" title="Thu nhỏ">-</button>
+        <button class="btn" style="padding:2px 8px;font-size:12px" onclick="resetZoom()" title="Đặt lại">Reset</button>
+      </div>
+
+      <div class="topology-legend">
+        <div class="legend-item"><span class="legend-dot" style="background:#22c55e"></span>ONLINE</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#ef4444"></span>OFFLINE</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#f59e0b"></span>WARNING</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#3b82f6"></span>MAINTENANCE</div>
+      </div>
+
+      <!-- Node Details Drawer -->
+      <div id="node-drawer" class="node-details-drawer">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <strong id="drawer-node-name" style="font-size:15px;color:#f8fafc">Device Name</strong>
+          <button style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:16px" onclick="closeDrawer()">✕</button>
+        </div>
+        <p style="margin:2px 0;font-size:12px;color:#94a3b8">IP: <span id="drawer-node-ip" class="mono" style="color:#e2e8f0"></span></p>
+        <p style="margin:2px 0;font-size:12px;color:#94a3b8">Loại: <span id="drawer-node-type" style="color:#e2e8f0"></span></p>
+        <p style="margin:2px 0;font-size:12px;color:#94a3b8">Trạng thái: <span id="drawer-node-status" class="badge"></span></p>
+        <p style="margin:2px 0;font-size:12px;color:#94a3b8">Độ trễ ping: <span id="drawer-node-latency" class="mono" style="color:#e2e8f0"></span></p>
+        <div style="margin-top:10px;display:flex;flex-direction:column;gap:6px">
+          <a id="drawer-link-metrics" class="btn" style="font-size:11px;text-align:center" href="#">Xem biểu đồ ICMP</a>
+          <a id="drawer-link-ports" class="btn" style="font-size:11px;text-align:center" href="#">Giám sát TCP Ports</a>
+          <a id="drawer-link-snmp" class="btn" style="font-size:11px;text-align:center" href="#">Cấu hình SNMP</a>
+        </div>
+      </div>
+
+      <canvas id="topology-canvas"></canvas>
+    </div>
+
+    <!-- Bảng danh sách liên kết mạng -->
+    <section class="panel" style="margin-top:18px">
+      <div class="panel-title">
+        <h2>Danh sách liên kết mạng (Network Links)</h2>
+        <small>PHYSICAL & LOGICAL TOPOLOGY EDGES</small>
+      </div>
+
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Thiết bị nguồn & Cổng</th>
+              <th>Thiết bị đích & Cổng</th>
+              <th>Nguồn phát hiện</th>
+              <th>Loại & Băng thông</th>
+              <th>Trạng thái</th>
+              <th>Phát hiện cuối</th>
+              <th>Mô tả</th>
+              <th sec:authorize="hasRole('ADMIN')">Thao tác</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr th:each="l : ${topology.links}">
+              <td class="mono" th:text="${l.id}">1</td>
+              <td>
+                <strong th:text="${l.sourceDeviceName}">Router</strong>
+                <small class="mono muted" style="display:block" th:text="${'Port: ' + (l.sourcePort ?: 'N/A') + ' · ' + l.sourceDeviceIp}"></small>
+              </td>
+              <td>
+                <strong th:text="${l.targetDeviceName}">Switch</strong>
+                <small class="mono muted" style="display:block" th:text="${'Port: ' + (l.targetPort ?: 'N/A') + ' · ' + l.targetDeviceIp}"></small>
+              </td>
+              <td>
+                <span class="badge" th:text="${l.discoverySource != null ? l.discoverySource.name() : 'MANUAL'}">MANUAL</span>
+              </td>
+              <td>
+                <span th:text="${l.linkType.name()}">ETHERNET</span>
+                <small class="mono muted" style="display:block" th:text="${l.bandwidthMbps != null ? l.bandwidthMbps + ' Mbps' : '-'}">1000 Mbps</small>
+              </td>
+              <td>
+                <span class="badge"
+                      th:classappend="${l.status.name() == 'UP' ? 'ONLINE' : (l.status.name() == 'DOWN' ? 'OFFLINE' : (l.status.name() == 'STALE' ? 'WARNING' : 'WARNING'))}"
+                      th:text="${l.status.name()}">UP</span>
+              </td>
+              <td class="mono" th:text="${l.lastDiscoveredAt != null ? #temporals.format(l.lastDiscoveredAt, 'HH:mm dd/MM/yyyy') : '-'}">-</td>
+              <td th:text="${l.description ?: '-'}">-</td>
+              <td sec:authorize="hasRole('ADMIN')">
+                <form th:action="@{/topology/links/{id}/delete(id=${l.id})}" method="post"
+                      onsubmit="return confirm('Bạn có chắc muốn xóa liên kết này?');">
+                  <button class="btn btn-danger" style="padding:2px 8px;font-size:11px" type="submit">Xóa</button>
+                </form>
+              </td>
+            </tr>
+            <tr th:if="${#lists.isEmpty(topology.links)}">
+              <td colspan="9">
+                <div class="empty">Chưa có liên kết mạng nào. Hãy thêm thủ công bên dưới hoặc chạy discovery khi có thiết bị hỗ trợ LLDP/CDP.</div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Form thêm liên kết mới (ADMIN / OPERATOR) -->
+    <section id="add-link-section" class="panel" style="margin-top:18px" sec:authorize="hasAnyRole('ADMIN','OPERATOR')">
+      <div class="panel-title">
+        <h2>Thêm liên kết mạng mới</h2>
+        <small>CONNECTIVITY CONFIGURATION</small>
+      </div>
+
+      <form th:action="@{/topology/links/save}" th:object="${linkForm}" method="post">
+        <div class="form-grid">
+          <div class="field">
+            <label>Thiết bị nguồn (Source) *</label>
+            <select class="form-control" th:field="*{sourceDeviceId}" required>
+              <option value="">-- Chọn thiết bị nguồn --</option>
+              <option th:each="d : ${devices}" th:value="${d.id}"
+                      th:text="${d.name + ' (' + d.ipAddress + ') - ' + d.deviceType}"></option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label>Thiết bị đích (Target) *</label>
+            <select class="form-control" th:field="*{targetDeviceId}" required>
+              <option value="">-- Chọn thiết bị đích --</option>
+              <option th:each="d : ${devices}" th:value="${d.id}"
+                      th:text="${d.name + ' (' + d.ipAddress + ') - ' + d.deviceType}"></option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label>Loại liên kết</label>
+            <select class="form-control" th:field="*{linkType}">
+              <option value="ETHERNET">Ethernet (Đồng)</option>
+              <option value="FIBER">Fiber (Cáp quang)</option>
+              <option value="WIRELESS">Wireless (Không dây)</option>
+              <option value="VPN">VPN (Ảo)</option>
+              <option value="LOGICAL">Logical (Luận lý)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-grid" style="margin-top:12px">
+          <div class="field">
+            <label>Cổng nguồn (vd: eth0, Gi0/1)</label>
+            <input class="form-control mono" type="text" th:field="*{sourcePort}" placeholder="Gi0/1">
+          </div>
+
+          <div class="field">
+            <label>Cổng đích (vd: eth1, Fa0/1)</label>
+            <input class="form-control mono" type="text" th:field="*{targetPort}" placeholder="Fa0/1">
+          </div>
+
+          <div class="field">
+            <label>Băng thông (Mbps)</label>
+            <input class="form-control mono" type="number" min="1" max="100000" th:field="*{bandwidthMbps}" placeholder="1000">
+          </div>
+        </div>
+
+        <div class="field" style="margin-top:12px">
+          <label>Ghi chú / Mô tả</label>
+          <input class="form-control" type="text" th:field="*{description}" placeholder="Mô tả liên kết cáp backbone, phòng máy...">
+        </div>
+
+        <div style="margin-top:16px">
+          <button class="btn btn-primary" type="submit">Lưu liên kết mạng</button>
+        </div>
+      </form>
+    </section>
+
+    <footer th:replace="~{fragments/shell :: footer}"></footer>
+  </main>
+</div>
+
+<script th:inline="javascript">
+  const rawNodes = /*[[${topology.nodes}]]*/ [];
+  const rawLinks = /*[[${topology.links}]]*/ [];
+
+  const canvas = document.getElementById('topology-canvas');
+  const ctx = canvas.getContext('2d');
+  const drawer = document.getElementById('node-drawer');
+
+  let scale = 1;
+  let panX = 0;
+  let panY = 0;
+  let isDragging = false;
+  let dragNode = null;
+  let startX, startY;
+
+  // Initialize nodes positions
+  const nodeRadius = 24;
+  const nodes = rawNodes.map((n, i) => {
+    const angle = (i / Math.max(1, rawNodes.length)) * 2 * Math.PI;
+    const r = Math.min(200, 50 + rawNodes.length * 18);
+    return {
+      ...n,
+      x: 350 + r * Math.cos(angle),
+      y: 280 + r * Math.sin(angle),
+      vx: 0,
+      vy: 0
+    };
+  });
+
+  const nodeMap = new Map();
+  nodes.forEach(n => nodeMap.set(n.id, n));
+
+  function resizeCanvas() {
+    canvas.width = canvas.parentElement.clientWidth;
+    canvas.height = canvas.parentElement.clientHeight;
+    draw();
+  }
+  window.addEventListener('resize', resizeCanvas);
+
+  function getStatusColor(status) {
+    switch (status) {
+      case 'ONLINE': return '#22c55e';
+      case 'OFFLINE': return '#ef4444';
+      case 'WARNING': return '#f59e0b';
+      case 'MAINTENANCE': return '#3b82f6';
+      default: return '#64748b';
+    }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    ctx.translate(panX, panY);
+    ctx.scale(scale, scale);
+
+    // 1. Draw Links
+    rawLinks.forEach(l => {
+      const src = nodeMap.get(l.sourceDeviceId);
+      const tgt = nodeMap.get(l.targetDeviceId);
+      if (!src || !tgt) return;
+
+      ctx.beginPath();
+      ctx.moveTo(src.x, src.y);
+      ctx.lineTo(tgt.x, tgt.y);
+
+      if (l.status === 'DOWN') {
+        ctx.strokeStyle = '#ef4444';
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([6, 4]);
+      } else if (l.status === 'DEGRADED') {
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 4]);
+      } else if (l.linkType === 'FIBER') {
+        ctx.strokeStyle = '#06b6d4';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([]);
+      } else {
+        ctx.strokeStyle = '#475569';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([]);
+      }
+
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Midpoint badge
+      const midX = (src.x + tgt.x) / 2;
+      const midY = (src.y + tgt.y) / 2;
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(midX - 22, midY - 9, 44, 18);
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '9px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText((l.bandwidthMbps ? l.bandwidthMbps + 'M' : 'LINK'), midX, midY);
+    });
+
+    // 2. Draw Nodes
+    nodes.forEach(n => {
+      const color = getStatusColor(n.status);
+
+      // Outer glow
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, nodeRadius + 3, 0, 2 * Math.PI);
+      ctx.fillStyle = color + '33';
+      ctx.fill();
+
+      // Node body
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, nodeRadius, 0, 2 * Math.PI);
+      ctx.fillStyle = '#1e293b';
+      ctx.fill();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 3;
+      ctx.stroke();
+
+      // Text icon (Initials of device type)
+      ctx.fillStyle = '#f8fafc';
+      ctx.font = 'bold 11px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const typeShort = (n.deviceType || 'DEV').substring(0, 3);
+      ctx.fillText(typeShort, n.x, n.y);
+
+      // Node label (Device Name)
+      ctx.font = '11px sans-serif';
+      ctx.fillStyle = '#e2e8f0';
+      ctx.fillText(n.name, n.x, n.y + nodeRadius + 14);
+
+      // Node IP
+      ctx.font = '9px monospace';
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillText(n.ipAddress, n.x, n.y + nodeRadius + 26);
+    });
+
+    ctx.restore();
+  }
+
+  // Mouse Interactions
+  canvas.addEventListener('mousedown', e => {
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = (e.clientX - rect.left - panX) / scale;
+    const mouseY = (e.clientY - rect.top - panY) / scale;
+
+    // Check hit node
+    for (let i = nodes.length - 1; i >= 0; i--) {
+      const n = nodes[i];
+      const dist = Math.hypot(n.x - mouseX, n.y - mouseY);
+      if (dist <= nodeRadius) {
+        dragNode = n;
+        isDragging = true;
+        startX = mouseX - n.x;
+        startY = mouseY - n.y;
+        showDrawer(n);
+        return;
+      }
+    }
+
+    isDragging = true;
+    startX = e.clientX - panX;
+    startY = e.clientY - panY;
+  });
+
+  window.addEventListener('mousemove', e => {
+    if (!isDragging) return;
+    if (dragNode) {
+      const rect = canvas.getBoundingClientRect();
+      dragNode.x = (e.clientX - rect.left - panX) / scale - startX;
+      dragNode.y = (e.clientY - rect.top - panY) / scale - startY;
+      draw();
+    } else {
+      panX = e.clientX - startX;
+      panY = e.clientY - startY;
+      draw();
+    }
+  });
+
+  window.addEventListener('mouseup', () => {
+    isDragging = false;
+    dragNode = null;
+  });
+
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
+    scale = Math.max(0.4, Math.min(3, scale * zoomFactor));
+    draw();
+  });
+
+  function zoomIn() { scale = Math.min(3, scale * 1.2); draw(); }
+  function zoomOut() { scale = Math.max(0.4, scale / 1.2); draw(); }
+  function resetZoom() { scale = 1; panX = 0; panY = 0; draw(); }
+
+  function showDrawer(n) {
+    document.getElementById('drawer-node-name').textContent = n.name;
+    document.getElementById('drawer-node-ip').textContent = n.ipAddress;
+    document.getElementById('drawer-node-type').textContent = n.deviceType || '-';
+
+    const stBadge = document.getElementById('drawer-node-status');
+    stBadge.textContent = n.status;
+    stBadge.className = 'badge ' + (n.status === 'ONLINE' ? 'ONLINE' : (n.status === 'OFFLINE' ? 'OFFLINE' : 'WARNING'));
+
+    document.getElementById('drawer-node-latency').textContent = n.latencyMs != null ? n.latencyMs.toFixed(1) + ' ms' : 'Chưa có số liệu';
+
+    document.getElementById('drawer-link-metrics').href = '/devices/metrics/' + n.id;
+    document.getElementById('drawer-link-ports').href = '/devices/' + n.id + '/ports';
+    document.getElementById('drawer-link-snmp').href = '/devices/' + n.id + '/snmp';
+
+    drawer.style.display = 'block';
+  }
+
+  function closeDrawer() {
+    drawer.style.display = 'none';
+  }
+
+  // Simple layout simulation on start
+  function autoLayout() {
+    if (nodes.length <= 1) return;
+    // Simple force layout
+    for (let step = 0; step < 50; step++) {
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+          const dx = nodes[j].x - nodes[i].x;
+          const dy = nodes[j].y - nodes[i].y;
+          const dist = Math.hypot(dx, dy) || 1;
+          if (dist < 150) {
+            const force = (150 - dist) / 10;
+            nodes[i].x -= (dx / dist) * force;
+            nodes[i].y -= (dy / dist) * force;
+            nodes[j].x += (dx / dist) * force;
+            nodes[j].y += (dy / dist) * force;
+          }
+        }
+      }
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    resizeCanvas();
+    autoLayout();
+    draw();
+  });
+</script>
+</body>
+</html>

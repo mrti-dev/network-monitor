@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>NDMMS · Báo cáo SLA mạng</title>
+  <link rel="stylesheet" th:href="@{/css/ndmms.css}">
+  <style>
+    .filter-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: flex-end;
+      padding: 14px;
+      background: #1e293b;
+      border-radius: 8px;
+      border: 1px solid #334155;
+      margin-top: 16px;
+    }
+    .filter-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .filter-item label {
+      font-size: 11px;
+      font-weight: 600;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .progress-bar-wrap {
+      width: 100%;
+      height: 6px;
+      background: #334155;
+      border-radius: 3px;
+      overflow: hidden;
+      margin-top: 4px;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+    .status-MET {
+      color: #22c55e;
+      background: rgba(34, 197, 94, 0.15);
+      border: 1px solid rgba(34, 197, 94, 0.4);
+    }
+    .status-AT_RISK {
+      color: #f59e0b;
+      background: rgba(245, 158, 11, 0.15);
+      border: 1px solid rgba(245, 158, 11, 0.4);
+    }
+    .status-BREACHED {
+      color: #ef4444;
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+    }
+    .status-NOT_AVAILABLE {
+      color: #94a3b8;
+      background: rgba(148, 163, 184, 0.12);
+      border: 1px solid rgba(148, 163, 184, 0.35);
+    }
+  </style>
+</head>
+<body>
+<div class="app-shell">
+  <aside th:replace="~{fragments/shell :: sidebar('sla')}"></aside>
+  <main class="workspace">
+    <header th:replace="~{fragments/shell :: top('REPORTING / SERVICE LEVEL AGREEMENT', 'Báo cáo cam kết chất lượng dịch vụ (SLA)')"></header>
+
+    <!-- Filter Bar -->
+    <form class="filter-bar" th:action="@{/reports/sla}" method="get">
+      <div class="filter-item">
+        <label>Kỳ đánh giá</label>
+        <select class="form-control" name="period" id="periodSelect" onchange="toggleCustomDates()">
+          <option value="TODAY" th:selected="${filter?.period?.name() == 'TODAY'}">Hôm nay (24h)</option>
+          <option value="LAST_7_DAYS" th:selected="${filter?.period?.name() == 'LAST_7_DAYS' or filter?.period == null}">7 ngày qua</option>
+          <option value="LAST_30_DAYS" th:selected="${filter?.period?.name() == 'LAST_30_DAYS'}">30 ngày qua</option>
+          <option value="CUSTOM" th:selected="${filter?.period?.name() == 'CUSTOM'}">Tùy chỉnh ngày</option>
+        </select>
+      </div>
+
+      <div class="filter-item custom-date" id="customDateFrom" style="display:none">
+        <label>Từ ngày</label>
+        <input class="form-control" type="date" name="fromDate" th:value="${filter?.fromDate}">
+      </div>
+
+      <div class="filter-item custom-date" id="customDateTo" style="display:none">
+        <label>Đến ngày</label>
+        <input class="form-control" type="date" name="toDate" th:value="${filter?.toDate}">
+      </div>
+
+      <div class="filter-item">
+        <label>Nhóm thiết bị</label>
+        <select class="form-control" name="groupId">
+          <option value="">Tất cả các nhóm</option>
+          <option th:each="g : ${groups}" th:value="${g.id}" th:text="${g.name}"
+                  th:selected="${filter?.groupId == g.id}"></option>
+        </select>
+      </div>
+
+      <div class="filter-item">
+        <label>Trạng thái SLA</label>
+        <select class="form-control" name="status">
+          <option value="">Tất cả trạng thái</option>
+          <option value="MET" th:selected="${filter?.status?.name() == 'MET'}">Đạt (MET)</option>
+          <option value="AT_RISK" th:selected="${filter?.status?.name() == 'AT_RISK'}">Có nguy cơ (AT RISK)</option>
+          <option value="BREACHED" th:selected="${filter?.status?.name() == 'BREACHED'}">Vi phạm (BREACHED)</option>
+          <option value="NOT_AVAILABLE" th:selected="${filter?.status?.name() == 'NOT_AVAILABLE'}">Chưa có dữ liệu (N/A)</option>
+        </select>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-left:auto">
+        <button class="btn btn-primary" type="submit">Lọc báo cáo</button>
+        <a class="btn" style="background:#0284c7;color:#fff"
+           th:href="@{/reports/sla/export(period=${filter?.period},fromDate=${filter?.fromDate},toDate=${filter?.toDate},groupId=${filter?.groupId},status=${filter?.status})}">
+          Xuất file CSV
+        </a>
+      </div>
+    </form>
+
+    <!-- KPI Grid -->
+    <section class="grid kpi-grid" style="margin-top:16px">
+      <article class="panel kpi">
+        <span class="label">Uptime toàn mạng</span>
+        <strong style="font-size:24px"
+                th:styleappend="${report.overallUptimePercentage != null ? (report.overallUptimePercentage >= 99.5 ? 'color:#22c55e' : (report.overallUptimePercentage >= 99.0 ? 'color:#f59e0b' : 'color:#ef4444')) : ''}"
+                th:text="${report.overallUptimePercentage != null ? report.overallUptimePercentage + '%' : 'N/A'}">99.9%</strong>
+        <small>Chỉ tiêu tiêu chuẩn: &ge; 99.5%</small>
+        <div class="progress-bar-wrap" th:if="${report.overallUptimePercentage != null}">
+          <div class="progress-bar-fill"
+               th:style="'width:' + ${report.overallUptimePercentage} + '%; background:' + (${report.overallUptimePercentage >= 99.5 ? '#22c55e' : (report.overallUptimePercentage >= 99.0 ? '#f59e0b' : '#ef4444')})"></div>
+        </div>
+      </article>
+
+      <article class="panel kpi">
+        <span class="label">Phân bổ tuân thủ SLA</span>
+        <strong style="font-size:20px">
+          <span style="color:#22c55e" th:text="${report.metCount}">0</span> Đạt ·
+          <span style="color:#f59e0b" th:text="${report.atRiskCount}">0</span> Nguy cơ ·
+          <span style="color:#ef4444" th:text="${report.breachedCount}">0</span> Vi phạm
+        </strong>
+        <small th:text="${'Tổng ' + report.totalDevicesCount + ' thiết bị đánh giá'}"></small>
+      </article>
+
+      <article class="panel kpi">
+        <span class="label">Độ trễ trung bình mạng</span>
+        <strong style="font-size:24px" th:text="${report.avgNetworkLatencyMs != null ? report.avgNetworkLatencyMs + ' ms' : 'N/A'}">12.5 ms</strong>
+        <small>Đo lường qua các phiên ICMP probe</small>
+      </article>
+
+      <article class="panel kpi">
+        <span class="label">Sự cố & Thời gian khôi phục</span>
+        <strong style="font-size:22px" th:text="${report.totalOutages + ' sự cố'}">0 sự cố</strong>
+        <small th:text="${'MTTR trung bình: ' + (report.avgMttrMinutes != null ? report.avgMttrMinutes + ' phút' : 'N/A')}"></small>
+      </article>
+    </section>
+
+    <!-- Device SLA Table -->
+    <section class="panel" style="margin-top:18px">
+      <div class="panel-title">
+        <h2>Hiệu suất cam kết dịch vụ theo thiết bị</h2>
+        <small>DEVICE AVAILABILITY & LATENCY COMPLIANCE METRICS</small>
+      </div>
+
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Thiết bị</th>
+              <th>Địa chỉ IP</th>
+              <th>Loại & Nhóm</th>
+              <th>Chỉ tiêu</th>
+              <th>Uptime thực tế</th>
+              <th>Trạng thái</th>
+              <th>Sự cố & Downtime</th>
+              <th>MTTR</th>
+              <th>MTTF</th>
+              <th>Độ trễ TB</th>
+              <th>Tuân thủ trễ</th>
+              <th>TCP Service</th>
+              <th>SNMP</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr th:each="d : ${report.deviceSlaList}">
+              <td>
+                <strong th:text="${d.deviceName}">Router Core</strong>
+              </td>
+              <td class="mono" th:text="${d.ipAddress}">192.168.1.1</td>
+              <td>
+                <span th:text="${d.deviceType ?: '-'}">ROUTER</span>
+                <small class="muted" style="display:block" th:text="${d.groupName ?: '-'}"></small>
+              </td>
+              <td class="mono" th:text="${d.targetUptimePercentage != null ? d.targetUptimePercentage + '%' : '99.5%'}">99.5%</td>
+              <td>
+                <strong class="mono" th:text="${d.uptimePercentage != null ? d.uptimePercentage + '%' : 'N/A'}">99.8%</strong>
+                <div class="progress-bar-wrap" th:if="${d.uptimePercentage != null}">
+                  <div class="progress-bar-fill"
+                       th:style="'width:' + ${d.uptimePercentage} + '%; background:' + (${d.slaStatus.name() == 'MET' ? '#22c55e' : (d.slaStatus.name() == 'AT_RISK' ? '#f59e0b' : '#ef4444')})"></div>
+                </div>
+              </td>
+              <td>
+                <span class="badge"
+                      th:classappend="${'status-' + d.slaStatus.name()}"
+                      th:text="${d.slaStatus.name() == 'MET' ? 'ĐẠT' : (d.slaStatus.name() == 'AT_RISK' ? 'NGUY CƠ' : (d.slaStatus.name() == 'BREACHED' ? 'VI PHẠM' : 'N/A'))}">ĐẠT</span>
+              </td>
+              <td>
+                <span th:text="${(d.totalOutages != null ? d.totalOutages : 0) + ' lần'}">0 lần</span>
+                <small class="mono muted" style="display:block" th:text="${(d.downtimeMinutes != null ? d.downtimeMinutes : 0) + ' phút'}">0 phút</small>
+              </td>
+              <td class="mono" th:text="${d.mttrMinutes != null ? d.mttrMinutes + ' ph' : 'N/A'}">N/A</td>
+              <td class="mono" th:text="${d.mttfMinutes != null ? d.mttfMinutes + ' ph' : 'N/A'}">N/A</td>
+              <td class="mono" th:text="${d.avgLatencyMs != null ? d.avgLatencyMs + ' ms' : 'N/A'}">5.2 ms</td>
+              <td>
+                <span class="mono" th:text="${d.latencyCompliancePercentage != null ? d.latencyCompliancePercentage + '%' : 'N/A'}">100%</span>
+              </td>
+              <td class="mono" th:text="${d.tcpAvailabilityPercentage != null ? d.tcpAvailabilityPercentage + '%' : 'N/A'}">N/A</td>
+              <td class="mono" th:text="${d.snmpAvailabilityPercentage != null ? d.snmpAvailabilityPercentage + '%' : 'N/A'}">N/A</td>
+            </tr>
+            <tr th:if="${#lists.isEmpty(report.deviceSlaList)}">
+              <td colspan="13">
+                <div class="empty">Không tìm thấy thiết bị nào khớp với điều kiện lọc.</div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer th:replace="~{fragments/shell :: footer}"></footer>
+  </main>
+</div>
+
+<script>
+function toggleCustomDates() {
+  const period = document.getElementById('periodSelect').value;
+  const isCustom = period === 'CUSTOM';
+  document.getElementById('customDateFrom').style.display = isCustom ? 'flex' : 'none';
+  document.getElementById('customDateTo').style.display = isCustom ? 'flex' : 'none';
+}
+document.addEventListener('DOMContentLoaded', toggleCustomDates);
+</script>
+</body>
+</html>

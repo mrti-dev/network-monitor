@@ -15,9 +15,11 @@ import com.network.network_monitor.entity.Device;
 import com.network.network_monitor.entity.TcpPortMonitor;
 import com.network.network_monitor.enums.DeviceStatus;
 import com.network.network_monitor.enums.TcpPortStatus;
+import com.network.network_monitor.enums.ServiceType;
 import com.network.network_monitor.exception.DuplicateResourceException;
 import com.network.network_monitor.exception.ResourceNotFoundException;
 import com.network.network_monitor.notification.TcpPortStatusChangedEvent;
+import com.network.network_monitor.notification.ServiceAvailabilityRecordedEvent;
 import com.network.network_monitor.repository.DeviceRepository;
 import com.network.network_monitor.repository.TcpPortMonitorRepository;
 import com.network.network_monitor.service.AlertService;
@@ -179,6 +181,8 @@ public class TcpPortMonitorServiceImpl implements TcpPortMonitorService {
 
         LocalDateTime now = result.checkedAt() != null ? result.checkedAt() : LocalDateTime.now(clock);
         monitor.setLastCheckedAt(now);
+        events.publishEvent(new ServiceAvailabilityRecordedEvent(
+                device.getId(), ServiceType.TCP, monitor.getId(), result.reachable(), now));
 
         if (result.reachable()) {
             monitor.setConsecutiveFailures(0);

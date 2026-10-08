@@ -170,8 +170,9 @@ class TcpPortMonitorServiceTest {
         assertThat(monitor.getStatus()).isEqualTo(TcpPortStatus.UP);
         assertThat(monitor.getConsecutiveSuccesses()).isEqualTo(2);
         verify(alertService, times(1)).resolvePortAlert(eq(testDevice), eq(80));
-        verify(eventPublisher, times(1)).publishEvent(argThat((TcpPortStatusChangedEvent e) ->
-                e.port() == 80 && e.currentStatus() == TcpPortStatus.UP));
+        verify(eventPublisher, times(1)).publishEvent(argThat((Object event) ->
+                event instanceof TcpPortStatusChangedEvent e
+                        && e.port() == 80 && e.currentStatus() == TcpPortStatus.UP));
     }
 
     @Test

@@ -40,6 +40,12 @@ public interface AlertRepository extends JpaRepository<Alert, Long> {
     List<Alert> findByDeviceIdAndAlertTypeAndPortAndStatusIn(
             Long deviceId, AlertType alertType, Integer port, Collection<AlertStatus> statuses);
 
+    @Query("SELECT a FROM Alert a WHERE a.triggeredAt >= :from AND a.triggeredAt <= :to")
+    List<Alert> findAlertsByPeriod(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    @Query("SELECT a FROM Alert a WHERE a.device.id = :deviceId AND a.triggeredAt >= :from AND a.triggeredAt <= :to")
+    List<Alert> findAlertsByDeviceIdAndPeriod(@Param("deviceId") Long deviceId, @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
     @Query(
         value = "SELECT a.id as id, a.device_id as deviceId, d.name as deviceName, d.is_deleted as isDeviceDeleted, " +
                 "a.alert_type as alertType, a.message as message, a.severity as severity, a.status as status, " +

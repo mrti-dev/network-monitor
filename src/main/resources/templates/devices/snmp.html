@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>NDMMS · Giám sát SNMP</title>
+  <link rel="stylesheet" th:href="@{/css/ndmms.css}">
+  <script th:src="@{/dist/js/sockjs.min.js}" defer></script>
+  <script th:src="@{/dist/js/stomp.min.js}" defer></script>
+  <script th:src="@{/js/websocket-client.js}" defer></script>
+</head>
+<body>
+<div class="app-shell">
+  <aside th:replace="~{fragments/shell :: sidebar('devices')}"></aside>
+  <main class="workspace">
+    <header th:replace="~{fragments/shell :: top('MONITORING / SNMP METRICS', 'Theo dõi tài nguyên SNMP')}"></header>
+
+    <div class="flash" th:if="${successMessage}" th:text="${successMessage}"></div>
+    <div class="flash error" th:if="${errorMessage}" th:text="${errorMessage}"></div>
+
+    <section class="grid kpi-grid">
+      <article class="panel kpi">
+        <span class="label">Thiết bị</span>
+        <strong style="font-size:18px" th:text="${device.name}">Router</strong>
+        <small class="mono" th:text="${device.ipAddress}">192.168.1.1</small>
+      </article>
+      <article class="panel kpi">
+        <span class="label">Trạng thái SNMP</span>
+        <strong style="font-size:20px">
+          <span th:if="${snmpConfig != null}" class="badge"
+                th:classappend="${snmpConfig.enabled ? 'ONLINE' : 'OFFLINE'}"
+                th:text="${snmpConfig.enabled ? 'ĐANG BẬT' : 'ĐÃ TẮT'}">ĐANG BẬT</span>
+          <span th:if="${snmpConfig == null}" class="badge OFFLINE">CHƯA CẤU HÌNH</span>
+        </strong>
+        <small th:text="${snmpConfig != null ? (snmpConfig.version + ' : Cổng ' + snmpConfig.port) : 'Cần cấu hình bên dưới'}">-</small>
+      </article>
+      <article class="panel kpi">
+        <span class="label">Tải CPU / RAM</span>
+        <strong style="font-size:20px" id="kpi-cpu-ram">
+          <span th:text="${latestMetric != null && latestMetric.cpuUsage != null ? #numbers.formatDecimal(latestMetric.cpuUsage, 1, 1) + '%' : '-'}">-</span>
+          /
+          <span th:text="${latestMetric != null && latestMetric.memoryUsage != null ? #numbers.formatDecimal(latestMetric.memoryUsage, 1, 1) + '%' : '-'}">-</span>
+        </strong>
+        <small>CPU Idle / Bộ nhớ thực tế</small>
+      </article>
+      <article class="panel kpi">
+        <span class="label">Băng thông đo được</span>
+        <strong style="font-size:17px" id="kpi-bandwidth">
+          <span th:text="${latestMetric != null && latestMetric.inboundBps != null ? #numbers.formatDecimal(latestMetric.inboundBps / 1000.0, 1, 1) + ' Kbps' : '-'}">-</span>
+          ↓ /
+          <span th:text="${latestMetric != null && latestMetric.outboundBps != null ? #numbers.formatDecimal(latestMetric.outboundBps / 1000.0, 1, 1) + ' Kbps' : '-'}">-</span>
+          ↑
+        </strong>
+        <small>Tốc độ truyền nhận gói tin</small>
+      </article>
+    </section>
+
+    <!-- Thao tác nhanh -->
+    <div style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <a class="btn" th:href="@{/devices}">Quay lại danh sách</a>
+      <a class="btn" th:href="@{/devices/{id}/ports(id=${device.id})}">Giám sát TCP Ports</a>
+      <a class="btn" th:href="@{/devices/metrics/{id}(id=${device.id})}">Biểu đồ ICMP</a>
+      <form th:if="${snmpConfig != null}" th:action="@{/devices/{id}/snmp/test(id=${device.id})}" method="post" style="display:inline">
+        <button class="btn btn-primary" type="submit">Kiểm tra kết nối (Test SNMP)</button>
+      </form>
+      <form th:if="${snmpConfig != null}" th:action="@{/devices/{id}/snmp/toggle(id=${device.id})}" method="post" style="display:inline">
+        <button class="btn" type="submit" th:text="${snmpConfig.enabled ? 'Tắt giám sát SNMP' : 'Bật giám sát SNMP'}">Bật/Tắt</button>
+      </form>
+    </div>
+
+    <!-- Bảng thông tin Network Interfaces -->
+    <section class="panel" style="margin-top:16px">
+      <div class="panel-title">
+        <h2>Giao diện mạng thiết bị (SNMP Interfaces)</h2>
+        <small>RFC 1213 MIB-II / IF-MIB OPERATIONAL STATUS</small>
+      </div>
+
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Index</th>
+              <th>Tên giao diện</th>
+              <th>Trạng thái</th>
+              <th>Inbound Octets (Bytes)</th>
+              <th>Outbound Octets (Bytes)</th>
+              <th>Ghi nhận lúc</th>
+            </tr>
+          </thead>
+          <tbody id="interfaces-table-body">
+            <tr th:each="iface : ${interfaces}">
+              <td class="mono" style="font-weight:600" th:text="${iface.interfaceIndex}">1</td>
+              <td th:text="${iface.interfaceName ?: 'Interface #' + iface.interfaceIndex}">eth0</td>
+              <td>
+                <span class="badge"
+                      th:classappend="${iface.operationalStatus.name() == 'UP' ? 'ONLINE' : (iface.operationalStatus.name() == 'DOWN' ? 'OFFLINE' : 'UNKNOWN')}"
+                      th:text="${iface.operationalStatus.name()}">UP</span>
+              </td>
+              <td class="mono" th:text="${iface.inboundOctets != null ? #numbers.formatInteger(iface.inboundOctets, 0, 'POINT') : '-'}">-</td>
+              <td class="mono" th:text="${iface.outboundOctets != null ? #numbers.formatInteger(iface.outboundOctets, 0, 'POINT') : '-'}">-</td>
+              <td class="mono muted" th:text="${iface.recordedAt != null ? #temporals.format(iface.recordedAt, 'HH:mm:ss dd/MM/yyyy') : '-'}">-</td>
+            </tr>
+            <tr th:if="${#lists.isEmpty(interfaces)}">
+              <td colspan="6">
+                <div class="empty">Chưa có dữ liệu interface mạng nào từ SNMP polling.</div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Form cấu hình SNMP -->
+    <section class="panel" style="margin-top:18px" sec:authorize="hasAnyRole('ADMIN','OPERATOR')">
+      <div class="panel-title">
+        <h2>Cấu hình kết nối SNMP</h2>
+        <small>SECURITY / ENCRYPTED CREDENTIAL STORAGE</small>
+      </div>
+
+      <form th:action="@{/devices/{deviceId}/snmp/save(deviceId=${device.id})}" th:object="${snmpForm}" method="post">
+        <input type="hidden" th:field="*{deviceId}">
+        <input type="hidden" th:field="*{id}">
+
+        <div class="form-grid">
+          <div class="field">
+            <label>Phiên bản SNMP *</label>
+            <select class="form-control" th:field="*{version}">
+              <option value="V2C">SNMP v2c (Community String)</option>
+              <option value="V3">SNMP v3 (USM)</option>
+            </select>
+            <span class="field-error" th:if="${#fields.hasErrors('version')}" th:errors="*{version}"></span>
+          </div>
+
+          <div class="field">
+            <label>Cổng SNMP (mặc định 161) *</label>
+            <input class="form-control mono" type="number" min="1" max="65535" th:field="*{port}" required>
+            <span class="field-error" th:if="${#fields.hasErrors('port')}" th:errors="*{port}"></span>
+          </div>
+
+          <div class="field">
+            <label>Community String *</label>
+            <input class="form-control mono" type="password" th:field="*{community}"
+                   th:placeholder="${snmpConfig != null ? '****** (Để trống nếu giữ nguyên)' : 'Nhập community string (vd: public)'}">
+            <span class="field-error" th:if="${#fields.hasErrors('community')}" th:errors="*{community}"></span>
+            <small style="color:#64748b;display:block;margin-top:4px">Được mã hóa AES-GCM tự động, không bao giờ lưu dưới dạng plaintext.</small>
+          </div>
+        </div>
+
+        <div class="form-grid" style="margin-top:12px">
+          <div class="field">
+            <label>Timeout kết nối (ms)</label>
+            <input class="form-control mono" type="number" min="500" max="30000" th:field="*{timeoutMs}">
+            <span class="field-error" th:if="${#fields.hasErrors('timeoutMs')}" th:errors="*{timeoutMs}"></span>
+          </div>
+
+          <div class="field">
+            <label>Số lần thử lại (Retries)</label>
+            <input class="form-control mono" type="number" min="0" max="5" th:field="*{retries}">
+            <span class="field-error" th:if="${#fields.hasErrors('retries')}" th:errors="*{retries}"></span>
+          </div>
+
+          <div class="field">
+            <label>Kích hoạt giám sát</label>
+            <select class="form-control" th:field="*{enabled}">
+              <option th:value="true">Bật (Enabled)</option>
+              <option th:value="false">Tắt (Disabled)</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="margin-top:16px;display:flex;gap:10px">
+          <button class="btn btn-primary" type="submit">Lưu cấu hình SNMP</button>
+          <button sec:authorize="hasRole('ADMIN')" th:if="${snmpConfig != null}"
+                  class="btn btn-danger" type="submit"
+                  th:formaction="@{/devices/{deviceId}/snmp/delete(deviceId=${device.id})}"
+                  onclick="return confirm('Bạn có chắc chắn muốn xóa cấu hình SNMP này?');">Xóa cấu hình</button>
+        </div>
+      </form>
+    </section>
+
+    <footer th:replace="~{fragments/shell :: footer}"></footer>
+  </main>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // Lắng nghe cập nhật realtime SNMP qua websocket nếu có
+    if (window.stompClient) {
+        window.stompClient.subscribe('/topic/devices/' + [[${device.id}]] + '/snmp', (message) => {
+            try {
+                const metric = JSON.parse(message.body);
+                if (metric) {
+                    const cpuRam = document.getElementById('kpi-cpu-ram');
+                    if (cpuRam) {
+                        const cpu = metric.cpuUsage !== null ? metric.cpuUsage.toFixed(1) + '%' : '-';
+                        const ram = metric.memoryUsage !== null ? metric.memoryUsage.toFixed(1) + '%' : '-';
+                        cpuRam.textContent = cpu + ' / ' + ram;
+                    }
+                    const bw = document.getElementById('kpi-bandwidth');
+                    if (bw) {
+                        const inKbps = metric.inboundBps !== null ? (metric.inboundBps / 1000).toFixed(1) + ' Kbps' : '-';
+                        const outKbps = metric.outboundBps !== null ? (metric.outboundBps / 1000).toFixed(1) + ' Kbps' : '-';
+                        bw.textContent = inKbps + ' ↓ / ' + outKbps + ' ↑';
+                    }
+                }
+            } catch (e) {
+                console.error('Lỗi phân tích WebSocket SNMP:', e);
+            }
+        });
+    }
+});
+</script>
+</body>
+</html>

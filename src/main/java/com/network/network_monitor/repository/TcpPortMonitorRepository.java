@@ -14,6 +14,8 @@ public interface TcpPortMonitorRepository extends JpaRepository<TcpPortMonitor, 
 
     List<TcpPortMonitor> findByDeviceIdOrderByPortAsc(Long deviceId);
 
+    List<TcpPortMonitor> findByDeviceId(Long deviceId);
+
     Optional<TcpPortMonitor> findByDeviceIdAndPort(Long deviceId, Integer port);
 
     boolean existsByDeviceIdAndPort(Long deviceId, Integer port);

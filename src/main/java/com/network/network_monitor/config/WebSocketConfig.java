@@ -34,11 +34,12 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
             "/topic/alerts",
             "/topic/devices",
             "/topic/ports",
-            "/topic/maintenance"
+            "/topic/maintenance",
+            "/topic/snmp"
     );
 
     public static final Pattern DEVICE_METRICS_PATTERN =
-            Pattern.compile("^/topic/devices/[0-9]+/metrics$");
+            Pattern.compile("^/topic/devices/[0-9]+/(metrics|snmp)$");
 
     public static boolean isDestinationAllowed(String destination) {
         if (destination == null) return false;

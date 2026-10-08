@@ -81,6 +81,7 @@
                 <div class="toolbar" style="gap:5px">
                   <a class="btn" style="min-height:30px;padding:2px 8px;font-size:12px" th:href="@{/devices/metrics/{id}(id=${d.id})}">Theo dõi</a>
                   <a class="btn" style="min-height:30px;padding:2px 8px;font-size:12px" th:href="@{/devices/{id}/ports(id=${d.id})}">Ports</a>
+                  <a class="btn" style="min-height:30px;padding:2px 8px;font-size:12px" th:href="@{/devices/{id}/snmp(id=${d.id})}">SNMP</a>
                   <a class="btn" style="min-height:30px;padding:2px 8px;font-size:12px" th:href="@{/devices/edit/{id}(id=${d.id})}" sec:authorize="hasAnyRole('ADMIN','OPERATOR')">Sửa</a>
                   <form th:action="@{/devices/maintenance/{id}(id=${d.id})}" method="post" style="display:inline" sec:authorize="hasAnyRole('ADMIN','OPERATOR')">
                     <button type="submit" class="btn btn-outline" style="min-height:30px;padding:2px 8px;font-size:12px"

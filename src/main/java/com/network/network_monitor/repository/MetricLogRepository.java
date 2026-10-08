@@ -45,4 +45,29 @@ public interface MetricLogRepository extends JpaRepository<MetricLog, Long> {
            "GROUP BY m.device.id, m.device.name, m.device.ipAddress " +
            "ORDER BY AVG(m.latencyMs) DESC")
     List<Object[]> findTopDevicesWithHighestLatency(@Param("since") LocalDateTime since, Pageable pageable);
+
+    @Query("SELECT m.device.id, count(m.id), " +
+           "SUM(CASE WHEN m.isReachable = true THEN 1L ELSE 0L END), " +
+           "AVG(CASE WHEN m.isReachable = true THEN m.latencyMs ELSE null END), " +
+           "MAX(CASE WHEN m.isReachable = true THEN m.latencyMs ELSE null END), " +
+           "AVG(m.packetLoss) " +
+           "FROM MetricLog m WHERE m.recordedAt >= :from AND m.recordedAt <= :to " +
+           "GROUP BY m.device.id")
+    List<Object[]> aggregateMetricsByPeriod(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    @Query("SELECT m.device.id, count(m.id) " +
+           "FROM MetricLog m WHERE m.isReachable = true AND m.latencyMs <= :threshold AND m.recordedAt >= :from AND m.recordedAt <= :to " +
+           "GROUP BY m.device.id")
+    List<Object[]> countLatencyCompliantByPeriod(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to, @Param("threshold") Double threshold);
+
+    @Query("SELECT count(m.id) " +
+           "FROM MetricLog m WHERE m.device.id = :deviceId AND m.isReachable = true AND m.latencyMs <= :threshold AND m.recordedAt >= :from AND m.recordedAt <= :to")
+    Long countLatencyCompliantForDevice(@Param("deviceId") Long deviceId, @Param("from") LocalDateTime from, @Param("to") LocalDateTime to, @Param("threshold") Double threshold);
+
+    @Query("SELECT count(m.id) FROM MetricLog m WHERE m.device.id = :deviceId " +
+           "AND m.packetLoss <= :threshold AND m.recordedAt >= :from AND m.recordedAt <= :to")
+    Long countPacketLossCompliantForDevice(@Param("deviceId") Long deviceId,
+                                           @Param("from") LocalDateTime from,
+                                           @Param("to") LocalDateTime to,
+                                           @Param("threshold") Double threshold);
 }

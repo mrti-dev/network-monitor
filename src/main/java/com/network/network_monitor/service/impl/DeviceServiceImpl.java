@@ -214,6 +214,15 @@ public class DeviceServiceImpl implements DeviceService {
             device.setMonitoringConfig(config);
 
             deviceRepository.save(device);
+            events.publishEvent(new DeviceStatusChangedEvent(
+                    device.getId(),
+                    device.getName(),
+                    device.getIpAddress(),
+                    null,
+                    device.getStatus(),
+                    "Khởi tạo thiết bị mới",
+                    LocalDateTime.now()
+            ));
         } else {
             Device device = deviceRepository.findById(formDto.getId())
                     .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy thiết bị với ID: " + formDto.getId()));

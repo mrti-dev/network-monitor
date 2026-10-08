@@ -81,6 +81,9 @@ public class SecurityConfig {
                 // Đọc — tất cả vai trò đã đăng nhập
                 .requestMatchers(HttpMethod.GET,
                         "/", "/devices", "/devices/metrics/**", "/devices/*/ports/**", "/api/devices/*/ports/**",
+                        "/devices/*/snmp/**", "/api/devices/*/snmp/**",
+                        "/topology", "/api/topology/**",
+                        "/reports/sla", "/reports/sla/**", "/api/reports/sla/**",
                         "/api/devices/*/metrics**", "/devices/*/maintenance/**", "/api/devices/*/maintenance/**", "/api/maintenance/**",
                         "/alerts", "/alerts/**",
                         "/inventory", "/discovery", "/monitoring", "/notifications").hasAnyRole("ADMIN", "OPERATOR", "VIEWER")
@@ -92,14 +95,19 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/devices/toggle/**").hasAnyRole("ADMIN", "OPERATOR")
                 .requestMatchers(HttpMethod.POST, "/devices/maintenance/**", "/devices/*/maintenance/**").hasAnyRole("ADMIN", "OPERATOR")
                 .requestMatchers(HttpMethod.POST, "/devices/*/ports/save", "/devices/*/ports/*/toggle").hasAnyRole("ADMIN", "OPERATOR")
+                .requestMatchers(HttpMethod.POST, "/devices/*/snmp/save", "/devices/*/snmp/toggle", "/devices/*/snmp/test").hasAnyRole("ADMIN", "OPERATOR")
+                .requestMatchers(HttpMethod.POST, "/api/topology/**", "/topology/links/save", "/topology/auto-discover").hasAnyRole("ADMIN", "OPERATOR")
                 // Cảnh báo acknowledge & resolve — ADMIN và OPERATOR
                 .requestMatchers(HttpMethod.POST, "/alerts/*/acknowledge", "/alerts/*/resolve").hasAnyRole("ADMIN", "OPERATOR")
                 // Cấu hình giám sát & nhóm — ADMIN và OPERATOR
                 .requestMatchers(HttpMethod.POST, "/monitoring/save", "/monitoring/groups/save").hasAnyRole("ADMIN", "OPERATOR")
-                // Xóa thiết bị & xóa nhóm & xóa port — chỉ ADMIN
+                // Xóa thiết bị & xóa nhóm & xóa port & xóa SNMP & xóa link topology — chỉ ADMIN
                 .requestMatchers(HttpMethod.POST, "/devices/delete/**").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.POST, "/devices/*/ports/*/delete").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.POST, "/devices/*/snmp/delete").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.POST, "/monitoring/groups/delete/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.POST, "/topology/links/*/delete").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.DELETE, "/api/topology/**").hasRole("ADMIN")
                 // Discovery API — ADMIN và OPERATOR
                 .requestMatchers(HttpMethod.POST, "/api/discovery/scan").hasAnyRole("ADMIN", "OPERATOR")
                 // Tất cả request khác cần đăng nhập

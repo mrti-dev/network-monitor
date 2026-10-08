@@ -40,6 +40,10 @@ docs
 
 AGENTS.md
 
+tools
+
+.codex-docx-work
+
 ### Secrets — NEVER commit ###
 .env
 .env.local

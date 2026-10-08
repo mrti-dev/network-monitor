@@ -63,6 +63,19 @@ public class GlobalExceptionHandler {
         return apiError(HttpStatus.BAD_REQUEST, ex.getErrorCode(), ex.getMessage(), req.getRequestURI());
     }
 
+    @ExceptionHandler(IllegalArgumentException.class)
+    public Object handleIllegalArgument(IllegalArgumentException ex,
+                                        RedirectAttributes attributes,
+                                        HttpServletRequest req) {
+        log.warn("Tham số không hợp lệ [{}]: {}", req.getRequestURI(), ex.getMessage());
+        if (isApiRequest(req)) {
+            return apiError(HttpStatus.BAD_REQUEST, "BAD_REQUEST", ex.getMessage(), req.getRequestURI());
+        }
+        attributes.addFlashAttribute("errorMessage", ex.getMessage());
+        String referer = req.getHeader("Referer");
+        return referer != null && !referer.isBlank() ? "redirect:" + referer : "redirect:/devices";
+    }
+
     // ------------------------------------------------------------------
     // Scan too large — HTTP 400
     // ------------------------------------------------------------------
@@ -102,17 +115,6 @@ public class GlobalExceptionHandler {
         return apiError(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", msg, req.getRequestURI());
     }
 
-    @ExceptionHandler(IllegalArgumentException.class)
-    public Object handleIllegalArgument(IllegalArgumentException ex,
-                                        RedirectAttributes attributes,
-                                        HttpServletRequest req) {
-        log.debug("Tham số không hợp lệ [{}]: {}", req.getRequestURI(), ex.getMessage());
-        if (isApiRequest(req)) {
-            return apiError(HttpStatus.BAD_REQUEST, "BAD_REQUEST", ex.getMessage(), req.getRequestURI());
-        }
-        attributes.addFlashAttribute("errorMessage", ex.getMessage());
-        return "redirect:/devices";
-    }
 
     // ------------------------------------------------------------------
     // Web MVC handlers (Thymeleaf redirects)

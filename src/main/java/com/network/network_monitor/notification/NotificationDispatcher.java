@@ -90,6 +90,18 @@ public class NotificationDispatcher {
         }
     }
 
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void dispatchSnmpMetricRecorded(SnmpMetricRecordedEvent event) {
+        try {
+            if (messagingTemplate != null) {
+                messagingTemplate.convertAndSend("/topic/devices/" + event.deviceId() + "/snmp", event);
+                messagingTemplate.convertAndSend("/topic/snmp", event);
+            }
+        } catch (Exception e) {
+            log.error("Lỗi gửi WebSocket cho SNMP metric event device ID {}", event.deviceId(), e);
+        }
+    }
+
     private void saveNotificationLog(Long alertId, String message, String status) {
         try {
             TransactionTemplate transaction = new TransactionTemplate(transactionManager);
