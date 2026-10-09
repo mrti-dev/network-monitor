@@ -165,6 +165,27 @@ class SlaReportServiceTest {
     }
 
     @Test
+    void icmpChecksWithoutStatusHistory_doNotInventDowntimeOrIncidents() {
+        when(deviceRepository.findAll()).thenReturn(List.of(server));
+        when(metricLogRepository.aggregateMetricsByPeriod(any(), any()))
+                .thenReturn(Collections.singletonList(new Object[]{2L, 10L, 8L, 12.0, 20.0, 0.0}));
+        when(statusHistoryRepository.findOverlappingHistory(eq(2L), any(), any())).thenReturn(Collections.emptyList());
+        when(slaTargetRepository.findByDeviceId(2L)).thenReturn(Optional.empty());
+        when(slaTargetRepository.findByGroupId(100L)).thenReturn(Optional.empty());
+        when(tcpPortMonitorRepository.findByDeviceId(2L)).thenReturn(Collections.emptyList());
+        when(snmpConfigRepository.findByDeviceId(2L)).thenReturn(Optional.empty());
+
+        DeviceSlaDto dto = slaReportService.generateReport(null).getDeviceSlaList().get(0);
+
+        assertThat(dto.getTotalChecks()).isEqualTo(10);
+        assertThat(dto.getUptimePercentage()).isNull();
+        assertThat(dto.getSlaStatus()).isEqualTo(SlaStatus.NOT_AVAILABLE);
+        assertThat(dto.getTotalOutages()).isZero();
+        assertThat(dto.getDowntimeMinutes()).isZero();
+        assertThat(dto.getMttrMinutes()).isNull();
+    }
+
+    @Test
     void statusFilter_isAppliedAfterSlaCalculation() {
         when(deviceRepository.findAll()).thenReturn(List.of(server));
         when(metricLogRepository.aggregateMetricsByPeriod(any(), any())).thenReturn(Collections.emptyList());

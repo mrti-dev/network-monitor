@@ -3,6 +3,7 @@ package com.network.network_monitor.controller;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -31,6 +32,9 @@ public class SlaReportWebController {
     private final SlaReportService slaReportService;
     private final DeviceGroupService deviceGroupService;
 
+    @Value("${app.sla.demo-mode:false}")
+    private boolean demoMode;
+
     @GetMapping("/reports/sla")
     public String viewSlaReport(@ModelAttribute("filter") SlaFilterDto filter, Model model) {
         SlaSummaryReportDto report;
@@ -46,6 +50,7 @@ public class SlaReportWebController {
         model.addAttribute("report", report);
         model.addAttribute("groups", groups);
         model.addAttribute("filter", filter);
+        model.addAttribute("demoMode", demoMode);
 
         return "reports/sla";
     }

@@ -68,7 +68,11 @@
 <div class="app-shell">
   <aside th:replace="~{fragments/shell :: sidebar('sla')}"></aside>
   <main class="workspace">
-    <header th:replace="~{fragments/shell :: top('REPORTING / SERVICE LEVEL AGREEMENT', 'Báo cáo cam kết chất lượng dịch vụ (SLA)')"></header>
+    <header th:replace="~{fragments/shell :: top('REPORTING / SERVICE LEVEL AGREEMENT', 'Báo cáo cam kết chất lượng dịch vụ (SLA)')}"></header>
+
+    <div class="flash error" th:if="${errorMessage}" th:text="${errorMessage}"></div>
+    <div class="flash" th:if="${successMessage}" th:text="${successMessage}"></div>
+    <div class="flash" th:if="${demoMode}">CHẾ ĐỘ DEMO SLA: dữ liệu mô phỏng chỉ nằm trong cơ sở dữ liệu demo; thiết bị mẫu có tiền tố [DEMO SLA].</div>
 
     <!-- Filter Bar -->
     <form class="filter-bar" th:action="@{/reports/sla}" method="get">
@@ -199,13 +203,13 @@
                 <strong class="mono" th:text="${d.uptimePercentage != null ? d.uptimePercentage + '%' : 'N/A'}">99.8%</strong>
                 <div class="progress-bar-wrap" th:if="${d.uptimePercentage != null}">
                   <div class="progress-bar-fill"
-                       th:style="'width:' + ${d.uptimePercentage} + '%; background:' + (${d.slaStatus.name() == 'MET' ? '#22c55e' : (d.slaStatus.name() == 'AT_RISK' ? '#f59e0b' : '#ef4444')})"></div>
+                       th:style="'width:' + ${d.uptimePercentage} + '%; background:' + (${d.slaStatus != null and d.slaStatus.name() == 'MET' ? '#22c55e' : (d.slaStatus != null and d.slaStatus.name() == 'AT_RISK' ? '#f59e0b' : (d.slaStatus != null and d.slaStatus.name() == 'BREACHED' ? '#ef4444' : '#94a3b8'))})"></div>
                 </div>
               </td>
               <td>
                 <span class="badge"
-                      th:classappend="${'status-' + d.slaStatus.name()}"
-                      th:text="${d.slaStatus.name() == 'MET' ? 'ĐẠT' : (d.slaStatus.name() == 'AT_RISK' ? 'NGUY CƠ' : (d.slaStatus.name() == 'BREACHED' ? 'VI PHẠM' : 'N/A'))}">ĐẠT</span>
+                      th:classappend="${d.slaStatus != null ? 'status-' + d.slaStatus.name() : 'status-NOT_AVAILABLE'}"
+                      th:text="${d.slaStatus != null ? (d.slaStatus.name() == 'MET' ? 'ĐẠT' : (d.slaStatus.name() == 'AT_RISK' ? 'NGUY CƠ' : (d.slaStatus.name() == 'BREACHED' ? 'VI PHẠM' : 'N/A'))) : 'N/A'}">ĐẠT</span>
               </td>
               <td>
                 <span th:text="${(d.totalOutages != null ? d.totalOutages : 0) + ' lần'}">0 lần</span>

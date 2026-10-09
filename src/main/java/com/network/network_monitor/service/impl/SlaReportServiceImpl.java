@@ -245,7 +245,22 @@ public class SlaReportServiceImpl implements SlaReportService {
         double maxLatency = target != null ? target.getMaxLatencyMs() : DEFAULT_MAX_LATENCY;
         double maxLoss = target != null ? target.getMaxPacketLossPercent() : DEFAULT_MAX_PACKET_LOSS;
 
-        // 2. Tính toán Uptime và Downtime dựa trên device_status_history theo duration
+        // 2. Metrics ICMP & Compliance từ metricLogRepository
+        long totalChecks = 0;
+        long reachableChecks = 0;
+        Double avgLatency = null;
+        Double maxLatencyRecorded = null;
+        Double avgLoss = null;
+
+        if (agg != null) {
+            totalChecks = agg[1] != null ? ((Number) agg[1]).longValue() : 0;
+            reachableChecks = agg[2] != null ? ((Number) agg[2]).longValue() : 0;
+            if (agg[3] != null) avgLatency = Math.round(((Number) agg[3]).doubleValue() * 10.0) / 10.0;
+            if (agg[4] != null) maxLatencyRecorded = Math.round(((Number) agg[4]).doubleValue() * 10.0) / 10.0;
+            if (agg[5] != null) avgLoss = Math.round(((Number) agg[5]).doubleValue() * 10.0) / 10.0;
+        }
+
+        // 3. Tính toán Uptime và Downtime dựa trên device_status_history
         LocalDateTime nowInZone = LocalDateTime.now(REPORT_ZONE);
         long reportDurationSec = Duration.between(from, to).toSeconds();
 
@@ -321,7 +336,7 @@ public class SlaReportServiceImpl implements SlaReportService {
             }
         }
 
-        // 3. Trạng thái SLA
+        // 4. Trạng thái SLA
         SlaStatus status;
         if (uptimePercentage == null) {
             status = SlaStatus.NOT_AVAILABLE;
@@ -331,21 +346,6 @@ public class SlaReportServiceImpl implements SlaReportService {
             status = SlaStatus.AT_RISK;
         } else {
             status = SlaStatus.BREACHED;
-        }
-
-        // 4. Metrics ICMP & Compliance
-        long totalChecks = 0;
-        long reachableChecks = 0;
-        Double avgLatency = null;
-        Double maxLatencyRecorded = null;
-        Double avgLoss = null;
-
-        if (agg != null) {
-            totalChecks = agg[1] != null ? ((Number) agg[1]).longValue() : 0;
-            reachableChecks = agg[2] != null ? ((Number) agg[2]).longValue() : 0;
-            if (agg[3] != null) avgLatency = Math.round(((Number) agg[3]).doubleValue() * 10.0) / 10.0;
-            if (agg[4] != null) maxLatencyRecorded = Math.round(((Number) agg[4]).doubleValue() * 10.0) / 10.0;
-            if (agg[5] != null) avgLoss = Math.round(((Number) agg[5]).doubleValue() * 10.0) / 10.0;
         }
 
         Double latencyCompliance = null;
